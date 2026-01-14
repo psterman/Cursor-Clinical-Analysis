@@ -21,6 +21,7 @@ export const getAllChatData = () => allChatData;
 export const getVibeResult = () => vibeResult;
 export const getParser = () => parser;
 export const getVibeAnalyzer = () => vibeAnalyzer;
+export { updateNumberWithAnimation, formatNumber, fetchTotalTestUsers, reportNewUser, updateGlobalStats };
 
 // 导出处理函数（需要先初始化）
 export const processFiles = async (files, type, callbacks) => {
@@ -70,6 +71,9 @@ export const renderFullDashboard = () => {
   if (vibeResult) {
     console.log('[Main] 调用 displayVibeCodingerAnalysis...');
     displayVibeCodingerAnalysis();
+    // 显示实时统计和维度排行榜
+    displayRealtimeStats();
+    displayDimensionRanking();
   }
   if (allChatData.length > 0) {
     console.log('[Main] 渲染对话列表...');
@@ -1649,6 +1653,289 @@ function renderVibeRadarChart() {
       },
     },
   });
+}
+
+// 更新数字并触发动画
+function updateNumberWithAnimation(element, newValue, formatter = (v) => v.toString()) {
+  if (!element) return;
+  
+  const oldValue = parseInt(element.textContent.replace(/[^0-9]/g, '')) || 0;
+  const newNum = parseInt(newValue.toString().replace(/[^0-9]/g, '')) || 0;
+  
+  if (oldValue !== newNum) {
+    // 添加更新动画类
+    element.classList.add('updating');
+    
+    // 数字跳动动画
+    element.classList.add('animate-pulse');
+    setTimeout(() => {
+      element.classList.remove('animate-pulse');
+    }, 600);
+    
+    // 更新数值（带过渡效果）
+    animateNumber(element, oldValue, newNum, formatter, () => {
+      element.classList.remove('updating');
+    });
+  } else {
+    // 即使数值相同，也显示闪烁效果（表示实时更新）
+    element.classList.add('animate-flash');
+    setTimeout(() => {
+      element.classList.remove('animate-flash');
+    }, 400);
+  }
+}
+
+// 数字递增动画
+function animateNumber(element, from, to, formatter, onComplete) {
+  const duration = 800; // 动画时长（毫秒）
+  const startTime = Date.now();
+  const difference = to - from;
+  
+  function update() {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // 使用缓动函数（ease-out）
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(from + difference * easeOut);
+    
+    element.textContent = formatter(current);
+    
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
+      element.textContent = formatter(to);
+      if (onComplete) onComplete();
+    }
+  }
+  
+  update();
+}
+
+// API 端点常量
+const API_ENDPOINT = 'https://cursor-clinical-analysis.psterman.workers.dev/';
+const DEFAULT_VALUE = 18429; // 默认值
+
+// 获取 API 端点
+function getApiEndpoint() {
+  // 检查环境变量（Cloudflare Pages 可以通过 wrangler.toml 或环境变量设置）
+  if (typeof window !== 'undefined') {
+    // 尝试从 window 对象获取（可通过 Cloudflare Workers 注入）
+    const envApiUrl = window.__API_ENDPOINT__ || window.API_ENDPOINT;
+    if (envApiUrl) {
+      return envApiUrl;
+    }
+    
+    // 尝试从 meta 标签获取
+    const metaApi = document.querySelector('meta[name="api-endpoint"]');
+    if (metaApi && metaApi.content) {
+      return metaApi.content;
+    }
+  }
+  
+  // 默认 API 端点
+  return API_ENDPOINT;
+}
+
+// 创建带超时的 AbortSignal（兼容性处理）
+function createTimeoutSignal(timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  // 如果支持 AbortSignal.timeout，优先使用
+  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+    clearTimeout(timeoutId);
+    return AbortSignal.timeout(timeoutMs);
+  }
+  
+  return controller.signal;
+}
+
+// 统一更新全局统计数字（支持 GET 和 POST）
+async function updateGlobalStats(shouldIncrement = false) {
+  const apiEndpoint = getApiEndpoint();
+  
+  try {
+    const response = await fetch(apiEndpoint, {
+      method: shouldIncrement ? 'POST' : 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      mode: 'cors',
+      body: shouldIncrement ? JSON.stringify({
+        action: 'increment',
+        timestamp: Date.now(),
+      }) : undefined,
+      signal: createTimeoutSignal(5000), // 5秒超时
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      // API 返回的字段是 value
+      const newValue = data.value || data.totalUsers || data.total || data.count || null;
+      
+      if (newValue !== null && newValue > 0) {
+        console.log(`[Main] ${shouldIncrement ? 'POST' : 'GET'} 请求成功，数字:`, newValue);
+        // 更新本地存储
+        localStorage.setItem('totalTestUsers', newValue.toString());
+        
+        // 实时更新页面显示
+        const totalTestUsersEl = document.getElementById('totalTestUsers');
+        if (totalTestUsersEl) {
+          if (shouldIncrement) {
+            // POST 请求时使用动画
+            updateNumberWithAnimation(totalTestUsersEl, newValue, formatNumber);
+          } else {
+            // GET 请求时直接更新
+            totalTestUsersEl.textContent = formatNumber(newValue);
+          }
+        }
+        
+        return newValue;
+      }
+    } else {
+      console.warn(`[Main] ${shouldIncrement ? 'POST' : 'GET'} 请求响应状态码异常:`, response.status);
+    }
+  } catch (error) {
+    console.warn(`[Main] ${shouldIncrement ? 'POST' : 'GET'} 请求失败，使用降级方案:`, error.message);
+  }
+  
+  // 优雅降级：优先使用本地存储，否则使用默认值
+  const cachedValue = parseInt(localStorage.getItem('totalTestUsers') || '0');
+  const fallbackValue = cachedValue > 0 ? cachedValue : DEFAULT_VALUE;
+  
+  // 更新页面显示（如果存在）
+  const totalTestUsersEl = document.getElementById('totalTestUsers');
+  if (totalTestUsersEl) {
+    totalTestUsersEl.textContent = formatNumber(fallbackValue);
+  }
+  
+  console.log(`[Main] 使用降级值:`, fallbackValue);
+  return fallbackValue;
+}
+
+// 从 API 获取测试总人数（保留向后兼容）
+async function fetchTotalTestUsers() {
+  return await updateGlobalStats(false);
+}
+
+// 向 API 报告新用户并获取更新后的数字（保留向后兼容）
+async function reportNewUser() {
+  return await updateGlobalStats(true);
+}
+
+// 显示实时统计
+async function displayRealtimeStats() {
+  if (!vibeResult || !globalStats) return;
+
+  // 从 API 获取测试总人数（页面加载时已获取，这里直接使用）
+  let totalTestUsers = await fetchTotalTestUsers();
+  const previousTotal = totalTestUsers;
+
+  // 计算技术排名（基于综合维度得分）
+  // 综合得分 = (L + P + D + F) / 4 + E * 2（E维度权重更高）
+  const dimensions = vibeResult.dimensions;
+  const compositeScore = (
+    (dimensions.L || 0) + 
+    (dimensions.P || 0) + 
+    (dimensions.D || 0) + 
+    (dimensions.F || 0)
+  ) / 4 + (dimensions.E || 0) * 2;
+  const maxScore = 100 + 20; // L/P/D/F最高100，E最高10（权重*2=20）
+  const scorePercentile = Math.max(1, Math.min(99, Math.round((compositeScore / maxScore) * 98)));
+  // 排名越靠前，percentile越小（前1%排名最好）
+  const rankPercentile = 100 - scorePercentile;
+  const estimatedRank = Math.max(1, Math.round((totalTestUsers * rankPercentile) / 100));
+
+  // 计算人格库解锁进度（243种人格，基于vibeIndex）
+  // vibeIndex是5位数字，每个位置有3种可能（0,1,2），总共3^5=243种组合
+  // 当前用户解锁了1种，所以进度是 1/243
+  const totalPersonalities = 243;
+  const unlockedPersonalities = 1; // 当前用户解锁的人格
+  const unlockProgress = Math.round((unlockedPersonalities / totalPersonalities) * 100);
+
+  // 更新DOM（带动画）
+  const totalTestUsersEl = document.getElementById('totalTestUsers');
+  const techRankEl = document.getElementById('techRank');
+  const personalityUnlockEl = document.getElementById('personalityUnlock');
+
+  if (totalTestUsersEl) {
+    // 如果数值发生变化，显示动画
+    if (previousTotal !== totalTestUsers) {
+      updateNumberWithAnimation(totalTestUsersEl, totalTestUsers, formatNumber);
+    } else {
+      totalTestUsersEl.textContent = formatNumber(totalTestUsers);
+    }
+  }
+  
+  if (techRankEl) {
+    updateNumberWithAnimation(techRankEl, estimatedRank, formatNumber);
+  }
+  
+  if (personalityUnlockEl) {
+    const newProgress = `${unlockProgress}%`;
+    if (personalityUnlockEl.textContent !== newProgress) {
+      updateNumberWithAnimation(personalityUnlockEl, unlockProgress, (v) => `${v}%`);
+    } else {
+      personalityUnlockEl.textContent = newProgress;
+    }
+  }
+
+  console.log('[Main] 实时统计已更新:', {
+    totalTestUsers,
+    techRank: estimatedRank,
+    unlockProgress: `${unlockProgress}%`
+  });
+}
+
+// 显示维度得分排行榜
+function displayDimensionRanking() {
+  if (!vibeResult || !vibeResult.dimensions) return;
+
+  const container = document.getElementById('dimensionRankingList');
+  if (!container) return;
+
+  const { dimensions } = vibeResult;
+
+  // 将维度转换为数组并按得分排序
+  const dimensionArray = Object.entries(dimensions)
+    .map(([key, value]) => ({
+      key,
+      label: DIMENSIONS[key]?.label || key,
+      value: key === 'E' ? value : value, // E维度不需要转换，其他维度已经是0-100
+      displayValue: key === 'E' ? value : Math.round(value), // E维度显示原始值
+    }))
+    .sort((a, b) => {
+      // E维度需要特殊处理（值域不同）
+      const aScore = a.key === 'E' ? a.value * 10 : a.value;
+      const bScore = b.key === 'E' ? b.value * 10 : b.value;
+      return bScore - aScore;
+    });
+
+  // 渲染排行榜
+  container.innerHTML = dimensionArray.map((dim, index) => {
+    const rank = index + 1;
+    const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+    // E维度最大值为10左右，其他维度最大值为100
+    const maxValue = dim.key === 'E' ? 10 : 100;
+    const percentage = Math.min(100, Math.round((dim.value / maxValue) * 100));
+    const unit = dim.key === 'E' ? '种技术' : '分';
+    
+    return `
+      <div class="prompt-item" style="background: ${rank <= 3 ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255, 255, 255, 0.03)'}; border-color: ${rank <= 3 ? 'rgba(139, 92, 246, 0.3)' : 'var(--card-border)'};">
+        <span class="prompt-rank" style="font-size: 20px; min-width: 50px;">${rankIcon}</span>
+        <span class="prompt-text" style="flex: 1; font-weight: 600;">${dim.label}</span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 120px; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
+            <div style="width: ${percentage}%; height: 100%; background: ${getDimensionColor(dim.key)}; transition: width 0.5s ease;"></div>
+          </div>
+          <span class="prompt-count" style="min-width: 80px; text-align: right; font-weight: 700; color: ${getDimensionColor(dim.key)};">${dim.displayValue} ${unit}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  console.log('[Main] 维度排行榜已渲染:', dimensionArray);
 }
 
 // 显示技术栈统计
