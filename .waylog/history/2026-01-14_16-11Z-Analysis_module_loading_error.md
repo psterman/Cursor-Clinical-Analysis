@@ -47,3 +47,29 @@ _Exported on 01/15/2026 at 00:11:26 GMT+8 from Cursor via WayLog_
 问题：模块加载是异步的，可能在文件上传时尚未完成。改进模块加载逻辑，增加错误处理和重试机制：
 
 ---
+
+
+**User**
+
+模块加载失败，提示刷新页面
+
+---
+
+
+**Cursor**
+
+控制台显示模块加载超时，且出现 "Failed to resolve module specifier 'chart.js/auto'"。原因是 `main.js` 使用了 ES6 模块导入，但浏览器无法解析这些依赖。检查并修复：
+
+
+
+问题在于 `main.js` 使用了 ES6 模块导入 `chart.js/auto` 和 `html2canvas`，但浏览器无法解析这些 npm 包名。这些库已通过 CDN 加载，应改为使用全局变量。修复中：
+
+
+
+
+
+
+
+移除 `main.js` 中无法解析的 npm 包导入，改为使用 CDN 提供的全局变量：
+
+---

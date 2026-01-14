@@ -5,8 +5,9 @@
 
 import { CursorParser } from './src/CursorParser.js';
 import { VibeCodingerAnalyzer, DIMENSIONS } from './src/VibeCodingerAnalyzer.js';
-import Chart from 'chart.js/auto';
-import html2canvas from 'html2canvas';
+// Chart.js 和 html2canvas 通过 CDN 加载，使用全局变量
+// import Chart from 'chart.js/auto';  // 已通过 CDN 加载，使用全局 Chart
+// import html2canvas from 'html2canvas';  // 已通过 CDN 加载，使用全局 html2canvas
 
 // 全局变量
 let parser = null;
@@ -1380,6 +1381,11 @@ async function handleExport() {
   const exportArea = elements.exportArea;
 
   try {
+    // 检查 html2canvas 是否已加载
+    if (typeof html2canvas === 'undefined') {
+      throw new Error('html2canvas 库未加载，请刷新页面重试');
+    }
+
     // 显示导出中提示
     const originalText = elements.exportBtn.innerHTML;
     elements.exportBtn.innerHTML = '<span class="btn-icon">⏳</span><span>生成中...</span>';
