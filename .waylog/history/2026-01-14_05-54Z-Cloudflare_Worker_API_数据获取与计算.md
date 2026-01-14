@@ -326,3 +326,46 @@ API 返回更新后的总数
 点击按钮后，会向 Cloudflare API 发送 POST 请求，API 将计数器 +1 并返回新总数，页面会实时更新显示。
 
 ---
+
+
+**User**
+
+export const reportNewUser = async () => {
+    // 1. 检查本地标记
+    const hasReported = localStorage.getItem('has_reported_stats');
+    if (hasReported) {
+        console.log('[Main] 用户已上报过，跳过自增');
+        // 如果已上报，直接获取当前总数而不加1
+        return await fetchTotalTestUsers(); 
+    }
+
+    const apiEndpoint = document.querySelector('meta[name="api-endpoint"]')?.content || '/api/stats';
+    try {
+        const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ t: Date.now() }) 
+        });
+
+        const data = await response.json();
+        
+        // 2. 成功后设置本地标记
+        if (data.status === 'success') {
+            localStorage.setItem('has_reported_stats', 'true');
+        }
+        
+        return data.value;
+    } catch (error) {
+        console.error('[Main] 上报失败:', error);
+        return null;
+    }
+};
+
+---
+
+
+**Cursor**
+
+查看 `main.js` 中 `reportNewUser` 的完整实现，并检查是否与 `index.html` 中的实现一致：
+
+---

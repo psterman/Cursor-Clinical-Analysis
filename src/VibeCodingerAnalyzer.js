@@ -1,11 +1,18 @@
 /**
  * VibeCodingerAnalyzer.js - Vibe Codinger 十二重人格画像分析器
- * 基于语义指纹识别规则，通过硬编码逻辑实现无 Token 消耗的深度分析
+ * 基于语义指纹识别规则，通过 Web Worker 高性能匹配实现无 Token 消耗的深度分析
  */
 
 // 导入吐槽文案库
 import ROAST_LIBRARY from './roastLibrary.json';
 import PERSONALITY_NAMES from './personalityNames.json';
+
+// 导入维度数据 JSON
+import LOGIC_DATA from './logic.json';
+import PATIENCE_DATA from './patience.json';
+import DETAIL_DATA from './Detail.json';
+import EXPLORATION_DATA from './Exploration.json';
+import FEEDBACK_DATA from './Feedback.json';
 
 /**
  * 维度定义 (Dimension Definitions)
@@ -330,12 +337,102 @@ export class VibeCodingerAnalyzer {
   constructor() {
     this.userMessages = [];
     this.analysisResult = null;
+    this.worker = null;
+    this.workerReady = false;
+    this.pendingTasks = [];
+    
+    // 初始化 Web Worker
+    this.initWorker();
   }
 
   /**
-   * 分析用户消息，生成人格画像
+   * 初始化 Web Worker
    */
-  analyze(chatData) {
+  initWorker() {
+    try {
+      // 创建 Worker（使用相对路径，兼容不同构建环境）
+      const workerUrl = new URL('./vibeAnalyzerWorker.js', import.meta.url);
+      this.worker = new Worker(workerUrl, {
+        type: 'module',
+      });
+
+      // 监听 Worker 消息
+      this.worker.onmessage = (e) => {
+        const { type, payload } = e.data;
+
+        switch (type) {
+          case 'INIT_SUCCESS':
+            this.workerReady = true;
+            console.log('[VibeAnalyzer] Worker 初始化成功:', payload);
+            // 处理待处理的任务
+            this.processPendingTasks();
+            break;
+
+          case 'ANALYZE_SUCCESS':
+            // 处理分析结果
+            const task = this.pendingTasks.shift();
+            if (task && task.resolve) {
+              task.resolve(payload);
+            }
+            break;
+
+          case 'ERROR':
+            console.error('[VibeAnalyzer] Worker 错误:', payload);
+            const errorTask = this.pendingTasks.shift();
+            if (errorTask && errorTask.reject) {
+              errorTask.reject(new Error(payload.message));
+            }
+            break;
+        }
+      };
+
+      this.worker.onerror = (error) => {
+        console.error('[VibeAnalyzer] Worker 运行时错误:', error);
+        this.workerReady = false;
+        // 降级到同步处理
+        const errorTask = this.pendingTasks.shift();
+        if (errorTask && errorTask.reject) {
+          errorTask.reject(error);
+        }
+      };
+
+      // 准备维度数据
+      const dimensionData = {
+        L: LOGIC_DATA,
+        P: PATIENCE_DATA,
+        D: DETAIL_DATA,
+        E: EXPLORATION_DATA,
+        F: FEEDBACK_DATA,
+      };
+
+      // 发送初始化消息
+      this.worker.postMessage({
+        type: 'INIT',
+        payload: dimensionData,
+      });
+    } catch (error) {
+      console.warn('[VibeAnalyzer] Web Worker 初始化失败，将使用同步处理:', error);
+      this.workerReady = false;
+    }
+  }
+
+  /**
+   * 处理待处理的任务
+   */
+  processPendingTasks() {
+    if (this.pendingTasks.length > 0 && this.workerReady) {
+      const task = this.pendingTasks[0];
+      this.worker.postMessage({
+        type: 'ANALYZE',
+        payload: task.payload,
+      });
+    }
+  }
+
+  /**
+   * 分析用户消息，生成人格画像（异步版本，使用 Web Worker）
+   */
+  async analyze(chatData) {
     // 提取用户消息
     this.userMessages = chatData.filter(item => item.role === 'USER');
     
@@ -343,7 +440,58 @@ export class VibeCodingerAnalyzer {
       return this.getDefaultResult();
     }
 
-    // 计算各维度得分
+    // 使用 Web Worker 计算维度得分
+    let dimensions;
+    try {
+      dimensions = await this.calculateDimensionsAsync(chatData);
+    } catch (error) {
+      console.warn('[VibeAnalyzer] Web Worker 计算失败，使用同步方法:', error);
+      dimensions = this.calculateDimensions();
+    }
+    
+    // 生成索引和吐槽文案
+    const vibeIndex = getVibeIndex(dimensions);
+    const roastText = getRoastText(vibeIndex);
+    const personalityName = getPersonalityName(vibeIndex);
+    
+    // 确定人格类型
+    const personalityType = this.determinePersonalityType(dimensions);
+    
+    // 生成详细分析
+    const analysis = this.generateAnalysis(dimensions, personalityType);
+    
+    // 生成 LPDEF 编码
+    const lpdef = this.generateLPDEF(dimensions);
+    
+    this.analysisResult = {
+      personalityType,
+      dimensions,
+      analysis,
+      statistics: this.calculateStatistics(),
+      semanticFingerprint: this.generateSemanticFingerprint(dimensions),
+      vibeIndex,      // 5位数字索引
+      roastText,      // 吐槽文案
+      personalityName, // 人格名称
+      lpdef,          // LPDEF 编码
+      globalAverage: this.globalAverage || null, // 全局平均基准（用于 Chart.js 对比）
+      metadata: this.analysisMetadata || null,  // 分析元数据（负面词计数、长度修正等）
+    };
+
+    return this.analysisResult;
+  }
+
+  /**
+   * 同步分析（降级方案）
+   */
+  analyzeSync(chatData) {
+    // 提取用户消息
+    this.userMessages = chatData.filter(item => item.role === 'USER');
+    
+    if (this.userMessages.length === 0) {
+      return this.getDefaultResult();
+    }
+
+    // 使用原有的同步方法计算维度
     const dimensions = this.calculateDimensions();
     
     // 生成索引和吐槽文案
@@ -357,18 +505,89 @@ export class VibeCodingerAnalyzer {
     // 生成详细分析
     const analysis = this.generateAnalysis(dimensions, personalityType);
     
-    this.analysisResult = {
+    // 生成 LPDEF 编码
+    const lpdef = this.generateLPDEF(dimensions);
+    
+    return {
       personalityType,
       dimensions,
       analysis,
       statistics: this.calculateStatistics(),
       semanticFingerprint: this.generateSemanticFingerprint(dimensions),
-      vibeIndex,      // 新增：5位数字索引
-      roastText,      // 新增：吐槽文案
-      personalityName, // 新增：人格名称
+      vibeIndex,
+      roastText,
+      personalityName,
+      lpdef,
+    };
+  }
+
+  /**
+   * 异步计算维度得分（使用 Web Worker）
+   */
+  calculateDimensionsAsync(chatData) {
+    return new Promise((resolve, reject) => {
+      if (!this.worker || !this.workerReady) {
+        // Worker 未就绪，使用同步方法
+        resolve(this.calculateDimensions());
+        return;
+      }
+
+      // 添加到待处理队列
+      this.pendingTasks.push({
+        payload: {
+          chatData,
+          weights: { L1: 15, L2: 5, L3: 1 },
+          config: {
+            BASE_SCORE: 40,
+            SENSITIVITY: 200,
+          },
+        },
+        resolve: (result) => {
+          // 将归一化得分转换为维度对象
+          const dimensions = {
+            L: result.dimensions.L || 0,
+            P: result.dimensions.P || 0,
+            D: result.dimensions.D || 0,
+            E: result.dimensions.E || 0,
+            F: result.dimensions.F || 0,
+          };
+          
+          // 保存全局平均基准和元数据
+          this.globalAverage = result.globalAverage;
+          this.analysisMetadata = result.metadata;
+          
+          resolve(dimensions);
+        },
+        reject,
+      });
+
+      // 如果 Worker 已就绪，立即处理
+      if (this.workerReady) {
+        this.processPendingTasks();
+      }
+    });
+  }
+
+  /**
+   * 生成 LPDEF 编码
+   * @param {Object} dimensions - 维度得分
+   * @returns {string} LPDEF 编码，如 "L2P1D2E1F2"
+   */
+  generateLPDEF(dimensions) {
+    const encode = (value, thresholds = [40, 70]) => {
+      if (value >= thresholds[1]) return '2'; // 高
+      if (value >= thresholds[0]) return '1'; // 中
+      return '0'; // 低
     };
 
-    return this.analysisResult;
+    // E 维度使用不同的阈值
+    const eEncode = (value) => {
+      if (value >= 10) return '2';
+      if (value >= 5) return '1';
+      return '0';
+    };
+
+    return `L${encode(dimensions.L)}P${encode(dimensions.P)}D${encode(dimensions.D)}E${eEncode(dimensions.E)}F${encode(dimensions.F)}`;
   }
 
   /**
@@ -804,16 +1023,74 @@ export class VibeCodingerAnalyzer {
   }
 
   /**
-   * 生成语义指纹
+   * 生成语义指纹（增强版）
    */
   generateSemanticFingerprint(dimensions) {
+    // 计算综合得分
+    const compositeScore = (
+      dimensions.L * 0.25 +
+      dimensions.P * 0.20 +
+      dimensions.D * 0.20 +
+      (dimensions.E * 10) * 0.15 + // E 维度需要放大
+      dimensions.F * 0.20
+    );
+
+    // 计算技术栈多样性（基于 E 维度）
+    const techDiversity = dimensions.E >= 10 ? '极高' : 
+                          dimensions.E >= 5 ? '中等' : '较低';
+
+    // 计算交互风格
+    const interactionStyle = this.calculateInteractionStyle(dimensions);
+
     return {
-      codeRatio: `${dimensions.L}%`,
+      codeRatio: `${Math.round(dimensions.L)}%`,
       patienceLevel: dimensions.P >= 70 ? '高耐心' : dimensions.P >= 40 ? '中耐心' : '低耐心',
       detailLevel: dimensions.D >= 70 ? '高细腻' : dimensions.D >= 40 ? '中细腻' : '低细腻',
       techExploration: dimensions.E >= 10 ? '高探索' : dimensions.E >= 5 ? '中探索' : '低探索',
-      feedbackDensity: `${dimensions.F}%`,
+      feedbackDensity: `${Math.round(dimensions.F)}%`,
+      compositeScore: Math.round(compositeScore),
+      techDiversity,
+      interactionStyle,
+      // 新增：维度平衡度
+      balanceIndex: this.calculateBalanceIndex(dimensions),
     };
+  }
+
+  /**
+   * 计算交互风格
+   */
+  calculateInteractionStyle(dimensions) {
+    const styles = [];
+    
+    if (dimensions.L >= 70) styles.push('代码驱动');
+    if (dimensions.P >= 70) styles.push('温和引导');
+    if (dimensions.D >= 70) styles.push('细节控');
+    if (dimensions.E >= 10) styles.push('技术探索');
+    if (dimensions.F >= 70) styles.push('积极反馈');
+    
+    if (styles.length === 0) {
+      return '均衡型';
+    }
+    
+    return styles.join(' · ');
+  }
+
+  /**
+   * 计算维度平衡度（标准差越小，越平衡）
+   */
+  calculateBalanceIndex(dimensions) {
+    const values = [dimensions.L, dimensions.P, dimensions.D, dimensions.F, dimensions.E * 10];
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // 转换为 0-100 的平衡度（标准差越小，平衡度越高）
+    const balanceScore = Math.max(0, 100 - stdDev);
+    
+    if (balanceScore >= 80) return '高度平衡';
+    if (balanceScore >= 60) return '较为平衡';
+    if (balanceScore >= 40) return '略有偏重';
+    return '明显偏重';
   }
 
   /**
@@ -845,6 +1122,21 @@ export class VibeCodingerAnalyzer {
       },
       statistics: {},
       semanticFingerprint: {},
+      vibeIndex: '00000',
+      roastText: '数据不足，无法生成吐槽',
+      personalityName: '未知人格',
+      lpdef: 'L0P0D0E0F0',
     };
+  }
+
+  /**
+   * 清理资源
+   */
+  destroy() {
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+      this.workerReady = false;
+    }
   }
 }

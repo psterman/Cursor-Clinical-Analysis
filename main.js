@@ -536,13 +536,20 @@ async function handleFileUpload(event, type, callbacks = {}) {
       englishWords: Object.keys(globalStats.englishWords || {}).length,
     });
 
-    // 进行 Vibe Codinger 人格分析
+    // 进行 Vibe Codinger 人格分析（异步）
     if (allChatData.length > 0) {
-      console.log('[Main] 开始 Vibe Codinger 人格分析...');
-      if (onLog) onLog('> 生成人格画像...');
-      vibeResult = vibeAnalyzer.analyze(allChatData);
-      console.log('[Main] Vibe Codinger 分析完成:', vibeResult);
-      if (onLog) onLog('> 分析完成！');
+      console.log('[Main] 开始 Vibe Codinger 人格分析（Web Worker）...');
+      if (onLog) onLog('> 生成人格画像（高性能匹配中）...');
+      try {
+        vibeResult = await vibeAnalyzer.analyze(allChatData);
+        console.log('[Main] Vibe Codinger 分析完成:', vibeResult);
+        if (onLog) onLog('> 分析完成！');
+      } catch (error) {
+        console.error('[Main] Vibe Codinger 分析失败:', error);
+        if (onLog) onLog('> 分析失败，使用降级方案...');
+        // 降级到同步方法
+        vibeResult = vibeAnalyzer.analyzeSync(allChatData);
+      }
     }
     
     // 调用完成回调（不自动显示 Dashboard，由 React 控制）
@@ -1444,7 +1451,7 @@ function displayVibeCodingerAnalysis() {
   const container = document.getElementById('vibeCodingerSection');
   if (!container) return;
 
-  const { personalityType, dimensions, analysis, semanticFingerprint, statistics, vibeIndex, roastText, personalityName } = vibeResult;
+  const { personalityType, dimensions, analysis, semanticFingerprint, statistics, vibeIndex, roastText, personalityName, lpdef } = vibeResult;
 
   // 生成人格头衔（根据索引特征）
   const getPersonalityTitle = (index) => {
@@ -1489,7 +1496,7 @@ function displayVibeCodingerAnalysis() {
       <div class="roast-header">
         <h3 class="roast-title">🔥 精准吐槽</h3>
         <div class="personality-title">${getPersonalityTitle(vibeIndex)}</div>
-        <div class="vibe-index">索引: ${vibeIndex}</div>
+        <div class="vibe-index">索引: ${vibeIndex} | LPDEF: ${lpdef || 'N/A'}</div>
       </div>
       <div class="roast-content">
         <p class="roast-text">${roastText}</p>
@@ -1538,24 +1545,48 @@ function displayVibeCodingerAnalysis() {
       <div class="fingerprint-grid">
         <div class="fingerprint-item">
           <span class="fingerprint-label">代码比例</span>
-          <span class="fingerprint-value">${semanticFingerprint.codeRatio}</span>
+          <span class="fingerprint-value">${semanticFingerprint.codeRatio || 'N/A'}</span>
         </div>
         <div class="fingerprint-item">
           <span class="fingerprint-label">耐心水平</span>
-          <span class="fingerprint-value">${semanticFingerprint.patienceLevel}</span>
+          <span class="fingerprint-value">${semanticFingerprint.patienceLevel || 'N/A'}</span>
         </div>
         <div class="fingerprint-item">
           <span class="fingerprint-label">细腻程度</span>
-          <span class="fingerprint-value">${semanticFingerprint.detailLevel}</span>
+          <span class="fingerprint-value">${semanticFingerprint.detailLevel || 'N/A'}</span>
         </div>
         <div class="fingerprint-item">
           <span class="fingerprint-label">技术探索</span>
-          <span class="fingerprint-value">${semanticFingerprint.techExploration}</span>
+          <span class="fingerprint-value">${semanticFingerprint.techExploration || 'N/A'}</span>
         </div>
         <div class="fingerprint-item">
           <span class="fingerprint-label">反馈密度</span>
-          <span class="fingerprint-value">${semanticFingerprint.feedbackDensity}</span>
+          <span class="fingerprint-value">${semanticFingerprint.feedbackDensity || 'N/A'}</span>
         </div>
+        ${semanticFingerprint.compositeScore ? `
+        <div class="fingerprint-item">
+          <span class="fingerprint-label">综合得分</span>
+          <span class="fingerprint-value">${semanticFingerprint.compositeScore}</span>
+        </div>
+        ` : ''}
+        ${semanticFingerprint.techDiversity ? `
+        <div class="fingerprint-item">
+          <span class="fingerprint-label">技术多样性</span>
+          <span class="fingerprint-value">${semanticFingerprint.techDiversity}</span>
+        </div>
+        ` : ''}
+        ${semanticFingerprint.interactionStyle ? `
+        <div class="fingerprint-item">
+          <span class="fingerprint-label">交互风格</span>
+          <span class="fingerprint-value">${semanticFingerprint.interactionStyle}</span>
+        </div>
+        ` : ''}
+        ${semanticFingerprint.balanceIndex ? `
+        <div class="fingerprint-item">
+          <span class="fingerprint-label">维度平衡度</span>
+          <span class="fingerprint-value">${semanticFingerprint.balanceIndex}</span>
+        </div>
+        ` : ''}
       </div>
     </div>
 
@@ -1567,7 +1598,7 @@ function displayVibeCodingerAnalysis() {
     </div>
   `;
 
-  // 渲染雷达图
+  // 渲染雷达图（增强版，显示所有维度）
   renderVibeRadarChart();
 }
 
@@ -1583,7 +1614,7 @@ function getDimensionColor(key) {
   return colors[key] || '#666';
 }
 
-// 渲染雷达图
+// 渲染雷达图（增强版：包含全局平均基准对比层）
 function renderVibeRadarChart() {
   if (!vibeResult || typeof Chart === 'undefined') return;
 
@@ -1598,28 +1629,64 @@ function renderVibeRadarChart() {
     window.vibeRadarChartInstance.destroy();
   }
 
-  // 创建新图表
+  // 获取全局平均基准（从 Worker 返回的数据中获取，如果没有则使用默认值）
+  const globalAverage = vibeResult.globalAverage || {
+    L: 65,
+    P: 70,
+    D: 60,
+    E: 55,
+    F: 75,
+  };
+
+  // E 维度映射到 0-100
+  const eValue = dimensions.E >= 10 ? 100 : dimensions.E >= 5 ? 70 : 40;
+  const eAverage = globalAverage.E >= 10 ? 100 : globalAverage.E >= 5 ? 70 : 40;
+  
   window.vibeRadarChartInstance = new Chart(ctx, {
     type: 'radar',
     data: {
       labels: ['逻辑力 (L)', '耐心值 (P)', '细腻度 (D)', '探索欲 (E)', '反馈感 (F)'],
-      datasets: [{
-        label: '维度得分',
-        data: [
-          dimensions.L,
-          dimensions.P,
-          dimensions.D,
-          Math.min(dimensions.E * 10, 100), // E 需要转换到 0-100
-          dimensions.F,
-        ],
-        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-        borderColor: 'rgba(59, 130, 246, 1)',
-        borderWidth: 2,
-        pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
-      }],
+      datasets: [
+        {
+          label: '你的得分',
+          data: [
+            dimensions.L,
+            dimensions.P,
+            dimensions.D,
+            eValue,
+            dimensions.F,
+          ],
+          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          borderColor: 'rgba(59, 130, 246, 1)',
+          borderWidth: 2,
+          pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+          pointBorderColor: '#fff',
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        },
+        {
+          label: '全网平均',
+          data: [
+            globalAverage.L,
+            globalAverage.P,
+            globalAverage.D,
+            eAverage,
+            globalAverage.F,
+          ],
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          borderColor: 'rgba(139, 92, 246, 0.5)',
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointBackgroundColor: 'rgba(139, 92, 246, 0.5)',
+          pointBorderColor: 'rgba(139, 92, 246, 0.8)',
+          pointHoverBackgroundColor: 'rgba(139, 92, 246, 0.8)',
+          pointHoverBorderColor: 'rgba(139, 92, 246, 1)',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+      ],
     },
     options: {
       responsive: true,
