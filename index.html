@@ -853,9 +853,15 @@
         (async function() {
             const paths = ['./main.js', '/main.js', './dist/main.js', '/dist/main.js'];
             let loaded = false;
+            let lastError = null;
+            
+            // 设置加载状态
+            window.analysisModuleLoading = true;
+            window.analysisModuleError = null;
             
             for (const path of paths) {
                 try {
+                    console.log(`[Main] 尝试加载模块，路径: ${path}`);
                     const module = await import(path);
                     const { 
                         initializeParser, 
@@ -883,16 +889,25 @@
                         reportNewUser,
                         updateGlobalStats
                     };
-                    console.log(`[Main] 成功加载模块，路径: ${path}`);
+                    console.log(`[Main] ✅ 成功加载模块，路径: ${path}`);
                     loaded = true;
+                    window.analysisModuleLoading = false;
+                    window.analysisModuleError = null;
                     break;
                 } catch (err) {
                     console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`, err);
+                    lastError = err;
                 }
             }
             
             if (!loaded) {
-                console.error('[Main] 所有路径都加载失败，请检查 main.js 文件位置');
+                console.error('[Main] ❌ 所有路径都加载失败，请检查 main.js 文件位置');
+                window.analysisModuleLoading = false;
+                window.analysisModuleError = lastError || new Error('模块加载失败：所有路径都尝试失败');
+                // 触发自定义事件，通知 React 组件
+                window.dispatchEvent(new CustomEvent('analysisModuleLoadFailed', { 
+                    detail: { error: window.analysisModuleError } 
+                }));
             }
         })();
     </script>
@@ -1082,28 +1097,62 @@
                 const init = async () => {
                     try {
                         console.log('检查 analysisModule:', window.analysisModule);
-                        // 等待模块加载
+                        console.log('检查 analysisModuleLoading:', window.analysisModuleLoading);
+                        console.log('检查 analysisModuleError:', window.analysisModuleError);
+                        
+                        // 等待模块加载（最多等待 5 秒）
                         let retries = 0;
-                        while (!window.analysisModule && retries < 10) {
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                            retries++;
+                        const maxRetries = 50; // 50 * 100ms = 5秒
+                        
+                        while (!window.analysisModule && retries < maxRetries) {
+                            // 如果模块加载失败，立即退出
+                            if (window.analysisModuleError) {
+                                console.error('模块加载失败:', window.analysisModuleError);
+                                setError('模块加载失败: ' + (window.analysisModuleError.message || '未知错误') + '，请刷新页面重试');
+                                return;
+                            }
+                            
+                            // 如果模块还在加载中，继续等待
+                            if (window.analysisModuleLoading !== false) {
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                                retries++;
+                            } else {
+                                // 加载完成但模块不存在，说明加载失败
+                                break;
+                            }
                         }
                         
                         if (window.analysisModule) {
-                            console.log('模块已加载，初始化解析器...');
+                            console.log('✅ 模块已加载，初始化解析器...');
                             await window.analysisModule.initializeParser();
                             setIsInitialized(true);
                             setLogs(prev => [...prev, '> 解析器初始化完成']);
                         } else {
-                            console.error('模块加载超时');
-                            setError('模块加载失败，请刷新页面重试');
+                            console.error('❌ 模块加载超时或失败');
+                            const errorMsg = window.analysisModuleError 
+                                ? '模块加载失败: ' + window.analysisModuleError.message
+                                : '模块加载超时，请刷新页面重试';
+                            setError(errorMsg);
                         }
                     } catch (err) {
                         console.error('初始化失败:', err);
                         setError('初始化失败: ' + err.message);
                     }
                 };
+                
+                // 监听模块加载失败事件
+                const handleLoadFailed = (event) => {
+                    console.error('收到模块加载失败事件:', event.detail);
+                    setError('模块加载失败: ' + (event.detail.error?.message || '未知错误') + '，请刷新页面重试');
+                };
+                window.addEventListener('analysisModuleLoadFailed', handleLoadFailed);
+                
                 init();
+                
+                // 清理事件监听器
+                return () => {
+                    window.removeEventListener('analysisModuleLoadFailed', handleLoadFailed);
+                };
             }, []);
 
             // 处理文件选择
@@ -1146,9 +1195,40 @@
                 setLogs(['> 开始解析数据库文件...']);
 
                 try {
-                    // 检查模块是否加载
+                    // 检查模块是否加载，如果未加载则等待一段时间
                     if (!window.analysisModule) {
-                        throw new Error('分析模块未加载，请刷新页面重试');
+                        console.warn('模块未加载，等待加载...');
+                        setLogs(prev => [...prev, '> 等待分析模块加载...']);
+                        
+                        // 等待模块加载（最多等待 3 秒）
+                        let retries = 0;
+                        const maxRetries = 30; // 30 * 100ms = 3秒
+                        
+                        while (!window.analysisModule && retries < maxRetries) {
+                            // 如果模块加载失败，立即退出
+                            if (window.analysisModuleError) {
+                                throw new Error('分析模块加载失败: ' + (window.analysisModuleError.message || '未知错误') + '，请刷新页面重试');
+                            }
+                            
+                            // 如果模块还在加载中，继续等待
+                            if (window.analysisModuleLoading !== false) {
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                                retries++;
+                            } else {
+                                // 加载完成但模块不存在，说明加载失败
+                                break;
+                            }
+                        }
+                        
+                        if (!window.analysisModule) {
+                            const errorMsg = window.analysisModuleError 
+                                ? '分析模块加载失败: ' + window.analysisModuleError.message
+                                : '分析模块加载超时';
+                            throw new Error(errorMsg + '，请刷新页面重试');
+                        }
+                        
+                        console.log('✅ 模块已加载，继续处理文件');
+                        setLogs(prev => [...prev, '> 分析模块已就绪']);
                     }
 
                     if (!isInitialized) {
