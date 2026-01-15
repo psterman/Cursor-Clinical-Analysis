@@ -852,8 +852,12 @@
         // 使用 try-catch 和多种路径尝试，确保在不同部署环境下正常工作
         (async function() {
             // 检测当前部署环境的基础路径
-            const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
-            const isGitHubPages = basePath.includes('Cursor-Clinical-Analysis');
+            const pathname = window.location.pathname;
+            // 提取基础路径（例如：/Cursor-Clinical-Analysis）
+            const basePath = pathname.includes('/Cursor-Clinical-Analysis') 
+                ? '/Cursor-Clinical-Analysis' 
+                : pathname.split('/').slice(0, -1).join('/') || '';
+            const isGitHubPages = pathname.includes('Cursor-Clinical-Analysis');
             
             // 构建路径列表，优先尝试 GitHub Pages 路径
             const paths = isGitHubPages 
@@ -873,6 +877,11 @@
                     `${basePath}/main.js`,
                     `${basePath}/dist/main.js`
                   ];
+            
+            console.log('[Main] 当前路径:', pathname);
+            console.log('[Main] 基础路径:', basePath);
+            console.log('[Main] 是 GitHub Pages:', isGitHubPages);
+            console.log('[Main] 尝试路径列表:', paths);
             
             let loaded = false;
             let lastError = null;
