@@ -73,3 +73,52 @@ _Exported on 01/15/2026 at 00:11:26 GMT+8 from Cursor via WayLog_
 移除 `main.js` 中无法解析的 npm 包导入，改为使用 CDN 提供的全局变量：
 
 ---
+
+
+**User**
+
+加载失败
+
+---
+
+
+**Cursor**
+
+所有 `main.js` 加载路径都返回 404，说明路径不正确。检查文件结构并修复路径：
+
+
+
+修复模块加载路径，使其适配 GitHub Pages 的部署结构：
+
+---
+
+
+**User**
+
+加载网页https://psterman.github.io/Cursor-Clinical-Analysis/ 
+模块加载失败: Failed to fetch dynamically imported module: https://psterman.github.io/dist/main.js，请刷新页面重试
+
+---
+
+
+**Cursor**
+
+确认仓库名为 `Cursor-Clinical-Analysis`，且 `main.js` 在根目录。更新路径检测逻辑，确保包含仓库路径：
+
+
+
+错误显示尝试了 `/dist/main.js`，但 `main.js` 在根目录。更新代码，确保正确提取仓库名并优先使用相对路径：
+
+
+
+重新读取文件以查看当前内容：
+
+
+
+检查路径列表，确保不包含 `/dist/main.js`：
+
+
+
+代码已正确。优化仓库名检测逻辑，确保能正确识别 `Cursor-Clinical-Analysis`：
+
+---
