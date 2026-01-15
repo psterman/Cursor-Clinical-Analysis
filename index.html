@@ -931,21 +931,26 @@
                 try {
                     console.log(`[Main] 尝试加载模块，路径: ${path}`);
                     
-                    // 先检查文件是否可访问
+                    // 构建完整 URL
+                    const testUrl = new URL(path, window.location.href).href;
+                    console.log(`[Main] 完整 URL: ${testUrl}`);
+                    
+                    // 先检查文件是否可访问（可选，可能被 CORS 阻止）
                     try {
-                        const testUrl = new URL(path, window.location.href).href;
-                        console.log(`[Main] 完整 URL: ${testUrl}`);
                         const testResponse = await fetch(testUrl, { method: 'HEAD' });
                         console.log(`[Main] 文件检查响应: ${testResponse.status} ${testResponse.statusText}`);
                         if (!testResponse.ok) {
-                            throw new Error(`文件不存在或无法访问: ${testResponse.status}`);
+                            console.warn(`[Main] HEAD 请求失败，但仍尝试导入模块`);
                         }
                     } catch (fetchErr) {
-                        console.warn(`[Main] 文件检查失败:`, fetchErr);
-                        throw fetchErr;
+                        console.warn(`[Main] HEAD 请求失败（可能是 CORS），但仍尝试导入模块:`, fetchErr.message);
+                        // 不抛出错误，继续尝试导入
                     }
                     
+                    // 尝试导入模块
+                    console.log(`[Main] 开始导入模块...`);
                     const module = await import(path);
+                    console.log(`[Main] 模块导入成功！`);
                     const { 
                         initializeParser, 
                         processFiles, 
