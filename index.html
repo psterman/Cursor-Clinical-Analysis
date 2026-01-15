@@ -871,36 +871,52 @@
                     // 生产环境：动态导入（支持多种部署路径）
                     console.log('[Main] 生产环境：动态导入 main.js');
                     
-                    // 检测基础路径
+                    // 检测基础路径（更准确的检测逻辑）
                     let basePath = '';
                     if (isGitHubPages) {
-                        const parts = pathname.split('/').filter(p => p && p !== 'index.html');
-                        basePath = parts.length > 0 ? '/' + parts[0] : '';
+                        // GitHub Pages: 从 pathname 提取仓库名
+                        // pathname 可能是: /Cursor-Clinical-Analysis/ 或 /Cursor-Clinical-Analysis/index.html
+                        const pathParts = pathname.split('/').filter(p => p);
+                        // 移除 'index.html' 如果存在
+                        const cleanParts = pathParts.filter(p => p !== 'index.html');
+                        if (cleanParts.length > 0) {
+                            // 第一个非空部分通常是仓库名
+                            basePath = '/' + cleanParts[0];
+                        }
                     } else {
-                        const parts = pathname.split('/').filter(p => p && p !== 'index.html');
-                        basePath = parts.length > 0 ? '/' + parts[0] : '';
+                        // 其他生产环境
+                        const pathParts = pathname.split('/').filter(p => p && p !== 'index.html');
+                        basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
                     }
                     
+                    // 确保 basePath 格式正确
                     if (basePath && basePath !== '/' && basePath.endsWith('/')) {
                         basePath = basePath.slice(0, -1);
                     }
                     
+                    // 获取当前目录（用于相对路径）
                     const currentDir = pathname.substring(0, pathname.lastIndexOf('/')) || '';
                     
-                    // 构建路径列表
+                    // 构建路径列表（优先尝试 dist 目录，因为这是构建后的文件位置）
                     const paths = [
+                        // 优先尝试 dist 目录（构建后的文件）
                         basePath ? `${basePath}/dist/main.js` : '/dist/main.js',
                         basePath ? `${basePath}/main.js` : '/main.js',
+                        // 相对路径
                         './dist/main.js',
                         './main.js',
-                        `${currentDir}/dist/main.js`,
-                        `${currentDir}/main.js`,
+                        // 基于当前目录
+                        currentDir ? `${currentDir}/dist/main.js` : null,
+                        currentDir ? `${currentDir}/main.js` : null,
+                        // 绝对路径（备用）
                         '/dist/main.js',
                         '/main.js'
-                    ];
+                    ].filter(p => p !== null);
                     
                     console.log('[Main] 当前 URL:', window.location.href);
+                    console.log('[Main] 当前路径:', pathname);
                     console.log('[Main] 基础路径:', basePath);
+                    console.log('[Main] 当前目录:', currentDir);
                     console.log('[Main] 尝试路径列表:', paths);
                     
                     let loaded = false;
@@ -920,7 +936,10 @@
                     }
                     
                     if (!loaded) {
-                        throw lastError || new Error('所有路径都加载失败');
+                        const errorMsg = lastError?.message || '所有路径都加载失败';
+                        console.error('[Main] ❌ 所有路径都加载失败');
+                        console.error('[Main] 最后尝试的错误:', lastError);
+                        throw new Error(`模块加载失败: ${errorMsg}。请检查 main.js 文件是否存在于 dist 目录中。`);
                     }
                 }
                 

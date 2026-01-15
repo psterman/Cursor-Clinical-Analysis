@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/Cursor-Clinical-Analysis/',
+  // 部署配置（GitHub Pages）
+  // 根据实际部署的仓库名设置 base 路径
+  base: process.env.VITE_BASE_PATH || '/Cursor-Clinical-Analysis/',
   // 开发服务器配置
   server: {
     port: 3000,
