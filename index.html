@@ -853,21 +853,47 @@
         (async function() {
             // 检测当前部署环境的基础路径
             const pathname = window.location.pathname;
-            // 提取基础路径（例如：/Cursor-Clinical-Analysis）
-            const basePath = pathname.includes('/Cursor-Clinical-Analysis') 
-                ? '/Cursor-Clinical-Analysis' 
-                : pathname.split('/').slice(0, -1).join('/') || '';
-            const isGitHubPages = pathname.includes('Cursor-Clinical-Analysis');
+            const hostname = window.location.hostname;
+            
+            // 更可靠的基础路径检测
+            let basePath = '';
+            let isGitHubPages = false;
+            
+            // 检查是否是 GitHub Pages
+            if (hostname.includes('github.io')) {
+                isGitHubPages = true;
+                // 从 pathname 中提取仓库名称
+                // pathname 可能是: /Cursor-Clinical-Analysis/ 或 /Cursor-Clinical-Analysis/index.html
+                const parts = pathname.split('/').filter(p => p);
+                if (parts.length > 0 && parts[0] !== '') {
+                    basePath = '/' + parts[0];
+                } else {
+                    // 如果 pathname 是根路径，尝试从 URL 推断
+                    basePath = '/Cursor-Clinical-Analysis';
+                }
+            } else {
+                // 非 GitHub Pages 环境
+                const parts = pathname.split('/').filter(p => p);
+                if (parts.length > 0) {
+                    // 移除最后一个部分（通常是文件名）
+                    basePath = '/' + parts.slice(0, -1).join('/');
+                }
+            }
+            
+            // 确保 basePath 不以 / 结尾（除了根路径）
+            if (basePath && basePath !== '/' && basePath.endsWith('/')) {
+                basePath = basePath.slice(0, -1);
+            }
             
             // 构建路径列表，优先尝试 GitHub Pages 路径
             const paths = isGitHubPages 
                 ? [
-                    `${basePath}/main.js`,
-                    `${basePath}/dist/main.js`,
-                    './main.js',
-                    '/main.js',
-                    './dist/main.js',
-                    '/dist/main.js'
+                    `${basePath}/main.js`,           // /Cursor-Clinical-Analysis/main.js
+                    `${basePath}/dist/main.js`,      // /Cursor-Clinical-Analysis/dist/main.js
+                    './main.js',                     // 相对路径
+                    '/main.js',                      // 绝对路径（通常不会工作）
+                    './dist/main.js',                // 相对路径
+                    '/dist/main.js'                  // 绝对路径（通常不会工作）
                   ]
                 : [
                     './main.js',
@@ -878,7 +904,9 @@
                     `${basePath}/dist/main.js`
                   ];
             
+            console.log('[Main] 当前 URL:', window.location.href);
             console.log('[Main] 当前路径:', pathname);
+            console.log('[Main] 主机名:', hostname);
             console.log('[Main] 基础路径:', basePath);
             console.log('[Main] 是 GitHub Pages:', isGitHubPages);
             console.log('[Main] 尝试路径列表:', paths);
