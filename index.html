@@ -930,6 +930,21 @@
             for (const path of uniquePaths) {
                 try {
                     console.log(`[Main] 尝试加载模块，路径: ${path}`);
+                    
+                    // 先检查文件是否可访问
+                    try {
+                        const testUrl = new URL(path, window.location.href).href;
+                        console.log(`[Main] 完整 URL: ${testUrl}`);
+                        const testResponse = await fetch(testUrl, { method: 'HEAD' });
+                        console.log(`[Main] 文件检查响应: ${testResponse.status} ${testResponse.statusText}`);
+                        if (!testResponse.ok) {
+                            throw new Error(`文件不存在或无法访问: ${testResponse.status}`);
+                        }
+                    } catch (fetchErr) {
+                        console.warn(`[Main] 文件检查失败:`, fetchErr);
+                        throw fetchErr;
+                    }
+                    
                     const module = await import(path);
                     const { 
                         initializeParser, 
@@ -963,20 +978,35 @@
                     window.analysisModuleError = null;
                     break;
                 } catch (err) {
-                    console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`, err.message || err);
+                    console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`);
+                    console.warn(`[Main] 错误类型: ${err.name}`);
+                    console.warn(`[Main] 错误信息: ${err.message}`);
+                    console.warn(`[Main] 错误堆栈:`, err.stack);
                     lastError = err;
                 }
             }
             
             if (!loaded) {
-                const errorMsg = `模块加载失败：所有路径都尝试失败。请确保 main.js 文件存在于以下位置之一：${uniquePaths.join(', ')}`;
-                console.error('[Main] ❌', errorMsg);
+                const errorMsg = `模块加载失败：所有路径都尝试失败。\n\n尝试的路径：\n${uniquePaths.map(p => '  - ' + p).join('\n')}\n\n可能的原因：\n1. GitHub Pages 正在部署中（请等待 1-2 分钟后刷新）\n2. main.js 文件未正确上传到仓库\n3. 浏览器缓存问题（请尝试硬刷新：Ctrl+F5）\n\n最后错误：${lastError?.message || '未知错误'}`;
+                console.error('[Main] ❌ 模块加载失败');
+                console.error('[Main] 尝试的路径:', uniquePaths);
                 console.error('[Main] 最后错误:', lastError);
+                console.error('[Main] 错误详情:', {
+                    name: lastError?.name,
+                    message: lastError?.message,
+                    stack: lastError?.stack
+                });
+                
                 window.analysisModuleLoading = false;
                 window.analysisModuleError = lastError || new Error(errorMsg);
+                
                 // 触发自定义事件，通知 React 组件
                 window.dispatchEvent(new CustomEvent('analysisModuleLoadFailed', { 
-                    detail: { error: window.analysisModuleError } 
+                    detail: { 
+                        error: window.analysisModuleError,
+                        paths: uniquePaths,
+                        message: errorMsg
+                    } 
                 }));
             }
         })();
