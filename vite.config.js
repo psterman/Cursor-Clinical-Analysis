@@ -25,7 +25,7 @@ export default defineConfig({
   },
 
   // 部署配置（GitHub Pages）
-  base: '/',
+  base: '/Cursor-Clinical-Analysis/',
 
   // 优化配置
   optimizeDeps: {
