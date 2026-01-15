@@ -895,6 +895,35 @@
                     console.log(`[Main] 尝试加载模块，路径: ${path}`);
                     // @vite-ignore - 动态导入路径需要在运行时确定，支持多种部署环境
                     const module = await import(/* @vite-ignore */ path);
+                    
+                    // 调试：检查模块导出
+                    console.log('[Main] 模块加载成功，检查导出:', {
+                        hasModule: !!module,
+                        moduleKeys: Object.keys(module || {}),
+                        hasInitializeParser: typeof module?.initializeParser === 'function',
+                        hasProcessFiles: typeof module?.processFiles === 'function',
+                        hasRenderFullDashboard: typeof module?.renderFullDashboard === 'function'
+                    });
+                    
+                    // 检查必需的导出函数
+                    const requiredExports = [
+                        'initializeParser',
+                        'processFiles',
+                        'renderFullDashboard',
+                        'getGlobalStats',
+                        'getVibeResult'
+                    ];
+                    
+                    const missingExports = requiredExports.filter(name => 
+                        typeof module[name] !== 'function'
+                    );
+                    
+                    if (missingExports.length > 0) {
+                        console.error(`[Main] 模块缺少必需的导出:`, missingExports);
+                        console.error(`[Main] 模块实际导出:`, Object.keys(module));
+                        throw new Error(`模块缺少必需的导出函数: ${missingExports.join(', ')}`);
+                    }
+                    
                     const { 
                         initializeParser, 
                         processFiles, 
@@ -915,12 +944,20 @@
                         renderFullDashboard,
                         getGlobalStats,
                         getVibeResult,
-                        updateNumberWithAnimation,
-                        formatNumber,
-                        fetchTotalTestUsers,
-                        reportNewUser,
-                        updateGlobalStats
+                        updateNumberWithAnimation: updateNumberWithAnimation || (() => {}),
+                        formatNumber: formatNumber || ((n) => n.toString()),
+                        fetchTotalTestUsers: fetchTotalTestUsers || (async () => 0),
+                        reportNewUser: reportNewUser || (async () => {}),
+                        updateGlobalStats: updateGlobalStats || (() => {})
                     };
+                    
+                    // 验证全局对象
+                    console.log('[Main] 全局模块对象已创建:', {
+                        hasInitializeParser: typeof window.analysisModule.initializeParser === 'function',
+                        hasProcessFiles: typeof window.analysisModule.processFiles === 'function',
+                        hasRenderFullDashboard: typeof window.analysisModule.renderFullDashboard === 'function'
+                    });
+                    
                     console.log(`[Main] ✅ 成功加载模块，路径: ${path}`);
                     loaded = true;
                     window.analysisModuleLoading = false;

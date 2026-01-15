@@ -19,12 +19,14 @@ export default defineConfig({
         analysis: './main.js', // 将 main.js 作为独立入口点
       },
       output: {
+        format: 'es', // ES 模块格式
         entryFileNames: (chunkInfo) => {
           // main.js 保持原文件名，其他文件使用默认命名
           return chunkInfo.name === 'analysis' ? 'main.js' : 'assets/[name]-[hash].js';
         },
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        exports: 'named', // 使用命名导出，确保所有 export 被保留
         manualChunks: (id) => {
           // 将第三方库分离到单独的 chunk
           if (id.includes('node_modules')) {
