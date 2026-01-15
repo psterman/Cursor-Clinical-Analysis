@@ -863,7 +863,14 @@
             // 从 URL 中提取可能的仓库名称（GitHub Pages）
             const getRepoName = () => {
                 const pathname = window.location.pathname;
-                console.log('[Main] 提取仓库名，路径名:', pathname);
+                const hostname = window.location.hostname;
+                console.log('[Main] 提取仓库名，路径名:', pathname, '主机名:', hostname);
+                
+                // 本地开发环境（localhost 或 127.0.0.1）不需要仓库名
+                if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                    console.log('[Main] 本地开发环境，不使用仓库名');
+                    return null;
+                }
                 
                 // GitHub Pages 的路径格式通常是 /repo-name/ 或 /repo-name/index.html
                 // 先尝试从路径中提取
@@ -885,8 +892,7 @@
                     return match3[1];
                 }
                 // 对于 psterman.github.io，已知仓库名是 Cursor-Clinical-Analysis
-                if (window.location.hostname === 'psterman.github.io' || 
-                    window.location.hostname.endsWith('.github.io')) {
+                if (hostname === 'psterman.github.io' || hostname.endsWith('.github.io')) {
                     // 如果路径是 / 或 /index.html 或包含 Cursor-Clinical-Analysis，使用已知的仓库名
                     if (pathname === '/' || pathname === '/index.html' || pathname.includes('Cursor-Clinical-Analysis')) {
                         console.log('[Main] 使用硬编码的仓库名: Cursor-Clinical-Analysis');
