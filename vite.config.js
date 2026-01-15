@@ -14,6 +14,8 @@ export default defineConfig({
     sourcemap: false,
     minify: 'terser',
     rollupOptions: {
+      // 保留入口签名，确保导出被保留
+      preserveEntrySignatures: 'exports-only',
       input: {
         main: './index.html',
         analysis: './main.js', // 将 main.js 作为独立入口点
@@ -27,6 +29,8 @@ export default defineConfig({
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
         exports: 'named', // 使用命名导出，确保所有 export 被保留
+        // 确保所有导出都被保留
+        preserveModules: false,
         manualChunks: (id) => {
           // 将第三方库分离到单独的 chunk
           // 注意：Chart.js 和 html2canvas 通过 CDN 加载，不在此处处理

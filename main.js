@@ -22,7 +22,8 @@ export const getAllChatData = () => allChatData;
 export const getVibeResult = () => vibeResult;
 export const getParser = () => parser;
 export const getVibeAnalyzer = () => vibeAnalyzer;
-export { updateNumberWithAnimation, formatNumber, fetchTotalTestUsers, reportNewUser, updateGlobalStats };
+// 注意：updateNumberWithAnimation, formatNumber, fetchTotalTestUsers, reportNewUser, updateGlobalStats 
+// 在文件后面定义，将在定义时直接导出
 
 // 导出处理函数（需要先初始化）
 export const processFiles = async (files, type, callbacks) => {
@@ -1094,7 +1095,7 @@ function displayStats() {
 }
 
 // 格式化数字（与 React 组件保持一致）
-function formatNumber(num) {
+export function formatNumber(num) {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 10000) return (num / 10000).toFixed(1) + '万';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -1736,7 +1737,7 @@ function renderVibeRadarChart() {
 }
 
 // 更新数字并触发动画
-function updateNumberWithAnimation(element, newValue, formatter = (v) => v.toString()) {
+export function updateNumberWithAnimation(element, newValue, formatter = (v) => v.toString()) {
   if (!element) return;
   
   const oldValue = parseInt(element.textContent.replace(/[^0-9]/g, '')) || 0;
@@ -1832,7 +1833,7 @@ function createTimeoutSignal(timeoutMs) {
 }
 
 // 统一更新全局统计数字（支持 GET 和 POST）
-async function updateGlobalStats(shouldIncrement = false) {
+export async function updateGlobalStats(shouldIncrement = false) {
   const apiEndpoint = getApiEndpoint();
   
   try {
@@ -1895,12 +1896,12 @@ async function updateGlobalStats(shouldIncrement = false) {
 }
 
 // 从 API 获取测试总人数（保留向后兼容）
-async function fetchTotalTestUsers() {
+export async function fetchTotalTestUsers() {
   return await updateGlobalStats(false);
 }
 
 // 向 API 报告新用户并获取更新后的数字（保留向后兼容）
-async function reportNewUser() {
+export async function reportNewUser() {
   return await updateGlobalStats(true);
 }
 
