@@ -8,7 +8,7 @@
     <meta name="api-endpoint" content="/api/stats">
     <!-- 引入必要的库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.1.0/wordcloud2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -851,80 +851,28 @@
         // 动态导入 main.js 模块（适配 GitHub Pages 和 Cloudflare Pages 路径）
         // 使用 try-catch 和多种路径尝试，确保在不同部署环境下正常工作
         (async function() {
-            // 获取当前页面的基础路径
-            const getBasePath = () => {
-                const pathname = window.location.pathname;
-                // 如果是 GitHub Pages，路径可能是 /repository-name/ 或 /
-                // 移除 index.html 或文件名
-                const basePath = pathname.replace(/\/[^\/]*\.html?$/, '').replace(/\/$/, '') || '';
-                return basePath;
-            };
+            // 检测当前部署环境的基础路径
+            const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
+            const isGitHubPages = basePath.includes('Cursor-Clinical-Analysis');
             
-            // 从 URL 中提取可能的仓库名称（GitHub Pages）
-            const getRepoName = () => {
-                const pathname = window.location.pathname;
-                const hostname = window.location.hostname;
-                console.log('[Main] 提取仓库名，路径名:', pathname, '主机名:', hostname);
-                
-                // 本地开发环境（localhost 或 127.0.0.1）不需要仓库名
-                if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                    console.log('[Main] 本地开发环境，不使用仓库名');
-                    return null;
-                }
-                
-                // GitHub Pages 的路径格式通常是 /repo-name/ 或 /repo-name/index.html
-                // 先尝试从路径中提取
-                const match = pathname.match(/^\/([^\/]+)\//);
-                if (match && match[1] && match[1] !== 'index.html') {
-                    console.log('[Main] 从路径匹配提取到仓库名:', match[1]);
-                    return match[1];
-                }
-                // 如果路径是 /repo-name/index.html，也提取仓库名
-                const match2 = pathname.match(/^\/([^\/]+)\/index\.html/);
-                if (match2 && match2[1]) {
-                    console.log('[Main] 从 index.html 路径提取到仓库名:', match2[1]);
-                    return match2[1];
-                }
-                // 如果路径是 /repo-name（没有尾部斜杠），也提取
-                const match3 = pathname.match(/^\/([^\/]+)$/);
-                if (match3 && match3[1] && match3[1] !== 'index.html') {
-                    console.log('[Main] 从无斜杠路径提取到仓库名:', match3[1]);
-                    return match3[1];
-                }
-                // 对于 psterman.github.io，已知仓库名是 Cursor-Clinical-Analysis
-                if (hostname === 'psterman.github.io' || hostname.endsWith('.github.io')) {
-                    // 如果路径是 / 或 /index.html 或包含 Cursor-Clinical-Analysis，使用已知的仓库名
-                    if (pathname === '/' || pathname === '/index.html' || pathname.includes('Cursor-Clinical-Analysis')) {
-                        console.log('[Main] 使用硬编码的仓库名: Cursor-Clinical-Analysis');
-                        return 'Cursor-Clinical-Analysis';
-                    }
-                }
-                console.log('[Main] 未能提取到仓库名');
-                return null;
-            };
-            
-            const basePath = getBasePath();
-            const repoName = getRepoName();
-            console.log('[Main] 当前基础路径:', basePath);
-            console.log('[Main] 检测到的仓库名:', repoName);
-            console.log('[Main] 完整 URL:', window.location.href);
-            console.log('[Main] 路径名:', window.location.pathname);
-            console.log('[Main] 主机名:', window.location.hostname);
-            
-            // 构建可能的路径列表（按优先级排序）
-            // 注意：移除 /main.js 因为文件不在根目录
-            const paths = [
-                // 如果有仓库名，优先尝试仓库路径（最可靠）
-                repoName ? `/${repoName}/main.js` : null,
-                // 相对路径（适用于大多数情况）
-                './main.js',
-                // 基于当前路径的绝对路径
-                basePath ? `${basePath}/main.js` : null,
-            ].filter(p => p !== null);
-            
-            // 去重
-            const uniquePaths = [...new Set(paths)];
-            console.log('[Main] 将尝试以下路径:', uniquePaths);
+            // 构建路径列表，优先尝试 GitHub Pages 路径
+            const paths = isGitHubPages 
+                ? [
+                    `${basePath}/main.js`,
+                    `${basePath}/dist/main.js`,
+                    './main.js',
+                    '/main.js',
+                    './dist/main.js',
+                    '/dist/main.js'
+                  ]
+                : [
+                    './main.js',
+                    '/main.js',
+                    './dist/main.js',
+                    '/dist/main.js',
+                    `${basePath}/main.js`,
+                    `${basePath}/dist/main.js`
+                  ];
             
             let loaded = false;
             let lastError = null;
@@ -933,30 +881,11 @@
             window.analysisModuleLoading = true;
             window.analysisModuleError = null;
             
-            for (const path of uniquePaths) {
+            for (const path of paths) {
                 try {
                     console.log(`[Main] 尝试加载模块，路径: ${path}`);
-                    
-                    // 构建完整 URL
-                    const testUrl = new URL(path, window.location.href).href;
-                    console.log(`[Main] 完整 URL: ${testUrl}`);
-                    
-                    // 先检查文件是否可访问（可选，可能被 CORS 阻止）
-                    try {
-                        const testResponse = await fetch(testUrl, { method: 'HEAD' });
-                        console.log(`[Main] 文件检查响应: ${testResponse.status} ${testResponse.statusText}`);
-                        if (!testResponse.ok) {
-                            console.warn(`[Main] HEAD 请求失败，但仍尝试导入模块`);
-                        }
-                    } catch (fetchErr) {
-                        console.warn(`[Main] HEAD 请求失败（可能是 CORS），但仍尝试导入模块:`, fetchErr.message);
-                        // 不抛出错误，继续尝试导入
-                    }
-                    
-                    // 尝试导入模块
-                    console.log(`[Main] 开始导入模块...`);
-                    const module = await import(path);
-                    console.log(`[Main] 模块导入成功！`);
+                    // @vite-ignore - 动态导入路径需要在运行时确定，支持多种部署环境
+                    const module = await import(/* @vite-ignore */ path);
                     const { 
                         initializeParser, 
                         processFiles, 
@@ -989,35 +918,18 @@
                     window.analysisModuleError = null;
                     break;
                 } catch (err) {
-                    console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`);
-                    console.warn(`[Main] 错误类型: ${err.name}`);
-                    console.warn(`[Main] 错误信息: ${err.message}`);
-                    console.warn(`[Main] 错误堆栈:`, err.stack);
+                    console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`, err);
                     lastError = err;
                 }
             }
             
             if (!loaded) {
-                const errorMsg = `模块加载失败：所有路径都尝试失败。\n\n尝试的路径：\n${uniquePaths.map(p => '  - ' + p).join('\n')}\n\n可能的原因：\n1. GitHub Pages 正在部署中（请等待 1-2 分钟后刷新）\n2. main.js 文件未正确上传到仓库\n3. 浏览器缓存问题（请尝试硬刷新：Ctrl+F5）\n\n最后错误：${lastError?.message || '未知错误'}`;
-                console.error('[Main] ❌ 模块加载失败');
-                console.error('[Main] 尝试的路径:', uniquePaths);
-                console.error('[Main] 最后错误:', lastError);
-                console.error('[Main] 错误详情:', {
-                    name: lastError?.name,
-                    message: lastError?.message,
-                    stack: lastError?.stack
-                });
-                
+                console.error('[Main] ❌ 所有路径都加载失败，请检查 main.js 文件位置');
                 window.analysisModuleLoading = false;
-                window.analysisModuleError = lastError || new Error(errorMsg);
-                
+                window.analysisModuleError = lastError || new Error('模块加载失败：所有路径都尝试失败');
                 // 触发自定义事件，通知 React 组件
                 window.dispatchEvent(new CustomEvent('analysisModuleLoadFailed', { 
-                    detail: { 
-                        error: window.analysisModuleError,
-                        paths: uniquePaths,
-                        message: errorMsg
-                    } 
+                    detail: { error: window.analysisModuleError } 
                 }));
             }
         })();

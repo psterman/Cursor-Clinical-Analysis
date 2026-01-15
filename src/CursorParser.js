@@ -66,11 +66,27 @@ export class CursorParser {
    *  sql.js
    */
   async init() {
+    // 自动检测部署环境的基础路径（支持 GitHub Pages）
+    const getBasePath = () => {
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname;
+        // 检测是否是 GitHub Pages 部署
+        if (pathname.includes('/Cursor-Clinical-Analysis/')) {
+          const basePath = pathname.split('/Cursor-Clinical-Analysis/')[0] + '/Cursor-Clinical-Analysis';
+          return basePath;
+        }
+      }
+      return '';
+    };
+    
+    const basePath = getBasePath();
+    const wasmPath = basePath ? `${basePath}/sql-wasm.wasm` : '/sql-wasm.wasm';
+    
     const SQL = await initSqlJs({
-      locateFile: (file) => `/sql-wasm.wasm`
+      locateFile: (file) => wasmPath
     });
     this.SQL = SQL;
-    console.log('[CursorParser] sql.js ');
+    console.log('[CursorParser] sql.js 初始化完成，WASM 路径:', wasmPath);
   }
 
   /**
