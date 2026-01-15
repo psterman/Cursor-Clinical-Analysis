@@ -854,6 +854,7 @@
             // 检测当前部署环境的基础路径
             const pathname = window.location.pathname;
             const hostname = window.location.hostname;
+            const origin = window.location.origin;
             
             // 更可靠的基础路径检测
             let basePath = '';
@@ -864,15 +865,17 @@
                 isGitHubPages = true;
                 // 从 pathname 中提取仓库名称
                 // pathname 可能是: /Cursor-Clinical-Analysis/ 或 /Cursor-Clinical-Analysis/index.html
+                // 或者如果是用户页面: / 或 /index.html (没有仓库名)
                 const parts = pathname.split('/').filter(p => p);
                 if (parts.length > 0 && parts[0] !== '') {
+                    // 有仓库名称的情况
                     basePath = '/' + parts[0];
                 } else {
-                    // 如果 pathname 是根路径，尝试从 URL 推断
-                    basePath = '/Cursor-Clinical-Analysis';
+                    // 用户页面（username.github.io），没有仓库名称，使用空路径
+                    basePath = '';
                 }
             } else {
-                // 非 GitHub Pages 环境
+                // 非 GitHub Pages 环境（本地开发或 Cloudflare Pages）
                 const parts = pathname.split('/').filter(p => p);
                 if (parts.length > 0) {
                     // 移除最后一个部分（通常是文件名）
@@ -885,29 +888,41 @@
                 basePath = basePath.slice(0, -1);
             }
             
-            // 构建路径列表，优先尝试 GitHub Pages 路径
+            // 获取当前脚本所在目录（更准确的相对路径）
+            const currentDir = pathname.substring(0, pathname.lastIndexOf('/')) || '';
+            
+            // 构建路径列表，优先尝试最可能的路径
             const paths = isGitHubPages 
                 ? [
-                    `${basePath}/main.js`,           // /Cursor-Clinical-Analysis/main.js
-                    `${basePath}/dist/main.js`,      // /Cursor-Clinical-Analysis/dist/main.js
-                    './main.js',                     // 相对路径
-                    '/main.js',                      // 绝对路径（通常不会工作）
-                    './dist/main.js',                // 相对路径
-                    '/dist/main.js'                  // 绝对路径（通常不会工作）
+                    // GitHub Pages 路径（根据实际部署位置调整）
+                    // 如果 basePath 为空（用户页面），优先尝试根路径
+                    basePath ? `${basePath}/main.js` : '/main.js',           // 有仓库名: /repo/main.js, 无仓库名: /main.js
+                    basePath ? `${basePath}/dist/main.js` : '/dist/main.js', // 有仓库名: /repo/dist/main.js, 无仓库名: /dist/main.js
+                    // 备用路径
+                    './main.js',                     // 相对路径（当前目录）
+                    './dist/main.js',                // 相对路径（dist 子目录）
+                    `${currentDir}/main.js`,         // 基于当前路径
+                    `${currentDir}/dist/main.js`,   // 基于当前路径的 dist
+                    '/main.js',                      // 绝对路径（备用）
+                    '/dist/main.js'                  // 绝对路径 dist（备用）
                   ]
                 : [
-                    './main.js',
-                    '/main.js',
-                    './dist/main.js',
-                    '/dist/main.js',
-                    `${basePath}/main.js`,
-                    `${basePath}/dist/main.js`
-                  ];
+                    // 本地开发或 Cloudflare Pages
+                    './main.js',                     // 相对路径（最常用）
+                    './dist/main.js',                // dist 子目录
+                    `${currentDir}/main.js`,         // 基于当前路径
+                    `${currentDir}/dist/main.js`,    // 基于当前路径的 dist
+                    '/main.js',                      // 绝对路径
+                    '/dist/main.js',                 // 绝对路径 dist
+                    basePath ? `${basePath}/main.js` : null,           // 基于 basePath（如果存在）
+                    basePath ? `${basePath}/dist/main.js` : null       // 基于 basePath 的 dist（如果存在）
+                  ].filter(p => p !== null); // 过滤掉 null 值
             
             console.log('[Main] 当前 URL:', window.location.href);
             console.log('[Main] 当前路径:', pathname);
             console.log('[Main] 主机名:', hostname);
             console.log('[Main] 基础路径:', basePath);
+            console.log('[Main] 当前目录:', currentDir);
             console.log('[Main] 是 GitHub Pages:', isGitHubPages);
             console.log('[Main] 尝试路径列表:', paths);
             
@@ -992,13 +1007,15 @@
                     window.analysisModuleError = null;
                     break;
                 } catch (err) {
-                    console.warn(`[Main] 路径 ${path} 加载失败，尝试下一个...`, err);
+                    console.warn(`[Main] 路径 ${path} 加载失败:`, err.message);
                     lastError = err;
                 }
             }
             
             if (!loaded) {
+                const errorMsg = lastError?.message || '未知错误';
                 console.error('[Main] ❌ 所有路径都加载失败，请检查 main.js 文件位置');
+                console.error('[Main] 最后一个错误:', lastError);
                 window.analysisModuleLoading = false;
                 window.analysisModuleError = lastError || new Error('模块加载失败：所有路径都尝试失败');
                 // 触发自定义事件，通知 React 组件

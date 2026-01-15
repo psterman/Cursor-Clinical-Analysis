@@ -42,7 +42,9 @@ export default defineConfig({
 
   // 部署配置（GitHub Pages）
   // 如果部署在仓库根目录，使用仓库名称作为 base
-  base: '/Cursor-Clinical-Analysis/',
+  // 如果部署在用户页面（username.github.io），使用 '/'
+  // 可以通过环境变量 VITE_BASE_PATH 覆盖
+  base: process.env.VITE_BASE_PATH || '/Cursor-Clinical-Analysis/',
 
   // 优化配置
   optimizeDeps: {
