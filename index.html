@@ -863,30 +863,37 @@
             // 从 URL 中提取可能的仓库名称（GitHub Pages）
             const getRepoName = () => {
                 const pathname = window.location.pathname;
+                console.log('[Main] 提取仓库名，路径名:', pathname);
+                
                 // GitHub Pages 的路径格式通常是 /repo-name/ 或 /repo-name/index.html
                 // 先尝试从路径中提取
                 const match = pathname.match(/^\/([^\/]+)\//);
                 if (match && match[1] && match[1] !== 'index.html') {
+                    console.log('[Main] 从路径匹配提取到仓库名:', match[1]);
                     return match[1];
                 }
                 // 如果路径是 /repo-name/index.html，也提取仓库名
                 const match2 = pathname.match(/^\/([^\/]+)\/index\.html/);
                 if (match2 && match2[1]) {
+                    console.log('[Main] 从 index.html 路径提取到仓库名:', match2[1]);
                     return match2[1];
                 }
                 // 如果路径是 /repo-name（没有尾部斜杠），也提取
                 const match3 = pathname.match(/^\/([^\/]+)$/);
                 if (match3 && match3[1] && match3[1] !== 'index.html') {
+                    console.log('[Main] 从无斜杠路径提取到仓库名:', match3[1]);
                     return match3[1];
                 }
                 // 对于 psterman.github.io，已知仓库名是 Cursor-Clinical-Analysis
                 if (window.location.hostname === 'psterman.github.io' || 
                     window.location.hostname.endsWith('.github.io')) {
-                    // 如果路径是 / 或 /index.html，使用已知的仓库名
-                    if (pathname === '/' || pathname === '/index.html' || pathname.match(/^\/Cursor-Clinical-Analysis/)) {
+                    // 如果路径是 / 或 /index.html 或包含 Cursor-Clinical-Analysis，使用已知的仓库名
+                    if (pathname === '/' || pathname === '/index.html' || pathname.includes('Cursor-Clinical-Analysis')) {
+                        console.log('[Main] 使用硬编码的仓库名: Cursor-Clinical-Analysis');
                         return 'Cursor-Clinical-Analysis';
                     }
                 }
+                console.log('[Main] 未能提取到仓库名');
                 return null;
             };
             
@@ -899,15 +906,14 @@
             console.log('[Main] 主机名:', window.location.hostname);
             
             // 构建可能的路径列表（按优先级排序）
+            // 注意：移除 /main.js 因为文件不在根目录
             const paths = [
-                // 相对路径（最优先，适用于大多数情况）
-                './main.js',
-                // 如果有仓库名，优先尝试仓库路径
+                // 如果有仓库名，优先尝试仓库路径（最可靠）
                 repoName ? `/${repoName}/main.js` : null,
+                // 相对路径（适用于大多数情况）
+                './main.js',
                 // 基于当前路径的绝对路径
                 basePath ? `${basePath}/main.js` : null,
-                // 根路径（通常不会成功，但作为后备）
-                '/main.js',
             ].filter(p => p !== null);
             
             // 去重

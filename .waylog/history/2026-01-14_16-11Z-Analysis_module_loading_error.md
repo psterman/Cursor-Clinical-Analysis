@@ -122,3 +122,21 @@ _Exported on 01/15/2026 at 00:11:26 GMT+8 from Cursor via WayLog_
 代码已正确。优化仓库名检测逻辑，确保能正确识别 `Cursor-Clinical-Analysis`：
 
 ---
+
+
+**User**
+
+模块加载失败: Failed to fetch dynamically imported module: https://psterman.github.io/main.js，请刷新页面重试
+
+---
+
+
+**Cursor**
+
+错误显示尝试了 `/main.js`（根路径），但文件在 `/Cursor-Clinical-Analysis/main.js`。检查并修复路径检测逻辑，确保优先使用正确的路径：
+
+
+
+修复路径检测逻辑，确保正确识别仓库路径，并移除无效的根路径：
+
+---
