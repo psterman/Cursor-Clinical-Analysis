@@ -66,56 +66,14 @@ export class CursorParser {
    *  sql.js
    */
   async init() {
-    // 自动检测部署环境的基础路径（支持 GitHub Pages 和多种部署方式）
-    const getBasePath = () => {
-      if (typeof window !== 'undefined') {
-        const pathname = window.location.pathname;
-        const hostname = window.location.hostname;
-        
-        // 检查是否是 GitHub Pages
-        if (hostname.includes('github.io')) {
-          // 从 pathname 中提取仓库名称
-          const parts = pathname.split('/').filter(p => p && p !== 'index.html');
-          if (parts.length > 0) {
-            // 有仓库名称的情况
-            return '/' + parts[0];
-          } else {
-            // 用户页面（username.github.io），没有仓库名称
-            return '';
-          }
-        } else if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('localhost')) {
-          // 本地开发环境
-          return '';
-        } else {
-          // 其他生产环境（Cloudflare Pages 等）
-          const parts = pathname.split('/').filter(p => p && p !== 'index.html');
-          if (parts.length > 0) {
-            return '/' + parts[0];
-          }
-          return '';
-        }
-      }
-      return '';
-    };
-    
-    const basePath = getBasePath();
-    
-    // 尝试多个可能的 WASM 文件路径
-    const possiblePaths = [
-      basePath ? `${basePath}/sql-wasm.wasm` : '/sql-wasm.wasm',
-      basePath ? `${basePath}/dist/sql-wasm.wasm` : '/dist/sql-wasm.wasm',
-      './sql-wasm.wasm',
-      './dist/sql-wasm.wasm',
-      '/sql-wasm.wasm',
-      '/dist/sql-wasm.wasm'
-    ];
-    
-    // 默认使用第一个路径
-    const wasmPath = possiblePaths[0];
+    // 使用相对路径，Vite 会自动处理路径解析
+    // 在开发环境：./sql-wasm.wasm
+    // 在生产环境：Vite 会根据 base 配置自动处理
+    const wasmPath = './sql-wasm.wasm';
     
     const SQL = await initSqlJs({
       locateFile: (file) => {
-        // 如果是 wasm 文件，使用检测到的路径
+        // 如果是 wasm 文件，使用相对路径
         if (file.endsWith('.wasm')) {
           return wasmPath;
         }
@@ -125,7 +83,6 @@ export class CursorParser {
     });
     this.SQL = SQL;
     console.log('[CursorParser] sql.js 初始化完成，WASM 路径:', wasmPath);
-    console.log('[CursorParser] 备用 WASM 路径:', possiblePaths.slice(1));
   }
 
   /**

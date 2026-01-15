@@ -5,8 +5,9 @@
 
 import { CursorParser } from './src/CursorParser.js';
 import { VibeCodingerAnalyzer, DIMENSIONS } from './src/VibeCodingerAnalyzer.js';
-import Chart from 'chart.js/auto';
-import html2canvas from 'html2canvas';
+// Chart.js 和 html2canvas 通过 CDN 加载，使用全局变量
+// import Chart from 'chart.js/auto';
+// import html2canvas from 'html2canvas';
 
 // 全局变量
 let parser = null;
@@ -1385,6 +1386,12 @@ async function handleExport() {
     elements.exportBtn.innerHTML = '<span class="btn-icon">⏳</span><span>生成中...</span>';
     elements.exportBtn.disabled = true;
 
+    // 使用全局 html2canvas 对象（通过 CDN 加载）
+    const html2canvas = window.html2canvas || globalThis.html2canvas;
+    if (!html2canvas) {
+      throw new Error('html2canvas 未加载，请确保 CDN 资源已正确加载');
+    }
+
     // 使用 html2canvas 导出
     const canvas = await html2canvas(exportArea, {
       backgroundColor: '#ffffff',
@@ -1616,7 +1623,12 @@ function getDimensionColor(key) {
 
 // 渲染雷达图（增强版：包含全局平均基准对比层）
 function renderVibeRadarChart() {
-  if (!vibeResult || typeof Chart === 'undefined') return;
+  // 使用全局 Chart 对象（通过 CDN 加载）
+  const Chart = window.Chart || globalThis.Chart;
+  if (!vibeResult || !Chart) {
+    console.warn('[Main] Chart.js 未加载，无法渲染雷达图');
+    return;
+  }
 
   const canvas = document.getElementById('vibeRadarChart');
   if (!canvas) return;
@@ -1642,6 +1654,7 @@ function renderVibeRadarChart() {
   const eValue = dimensions.E >= 10 ? 100 : dimensions.E >= 5 ? 70 : 40;
   const eAverage = globalAverage.E >= 10 ? 100 : globalAverage.E >= 5 ? 70 : 40;
   
+  // Chart 已在函数开头声明，直接使用
   window.vibeRadarChartInstance = new Chart(ctx, {
     type: 'radar',
     data: {

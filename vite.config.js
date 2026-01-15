@@ -29,10 +29,9 @@ export default defineConfig({
         exports: 'named', // 使用命名导出，确保所有 export 被保留
         manualChunks: (id) => {
           // 将第三方库分离到单独的 chunk
+          // 注意：Chart.js 和 html2canvas 通过 CDN 加载，不在此处处理
           if (id.includes('node_modules')) {
             if (id.includes('sql.js')) return 'sql.js';
-            if (id.includes('chart.js')) return 'chart.js';
-            if (id.includes('html2canvas')) return 'html2canvas';
             return 'vendor';
           }
         },
@@ -48,7 +47,8 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
 
   // 优化配置
+  // 注意：Chart.js 和 html2canvas 通过 CDN 加载，不在依赖中
   optimizeDeps: {
-    include: ['sql.js', 'chart.js', 'html2canvas'],
+    include: ['sql.js'],
   },
 });
