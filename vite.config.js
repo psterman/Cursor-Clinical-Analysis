@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: '/Cursor-Clinical-Analysis/',
   // 开发服务器配置
   server: {
     port: 3000,
@@ -46,7 +47,7 @@ export default defineConfig({
   // 如果部署在用户页面（username.github.io），使用 '/'
   // 可以通过环境变量 VITE_BASE_PATH 覆盖
   // 默认使用 '/' 以支持自动检测，实际路径在运行时通过 index.html 中的逻辑检测
-  base: process.env.VITE_BASE_PATH || '/',
+  // base: process.env.VITE_BASE_PATH || '/',
 
   // 优化配置
   // 注意：Chart.js 和 html2canvas 通过 CDN 加载，不在依赖中
