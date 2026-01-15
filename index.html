@@ -898,29 +898,38 @@
                     const currentDir = pathname.substring(0, pathname.lastIndexOf('/')) || '';
                     
                     // 构建路径列表（优先尝试 dist 目录，因为这是构建后的文件位置）
+                    // 注意：移除可能导致错误的绝对路径，只保留有效的路径
                     const paths = [
                         // 优先尝试 dist 目录（构建后的文件）
-                        basePath ? `${basePath}/dist/main.js` : '/dist/main.js',
-                        basePath ? `${basePath}/main.js` : '/main.js',
-                        // 相对路径
+                        basePath ? `${basePath}/dist/main.js` : null,
+                        basePath ? `${basePath}/main.js` : null,
+                        // 相对路径（最可靠）
                         './dist/main.js',
                         './main.js',
                         // 基于当前目录
                         currentDir ? `${currentDir}/dist/main.js` : null,
                         currentDir ? `${currentDir}/main.js` : null,
-                        // 绝对路径（备用）
-                        '/dist/main.js',
-                        '/main.js'
                     ].filter(p => p !== null);
+                    
+                    // 如果 basePath 存在，添加绝对路径作为备用
+                    if (basePath) {
+                        paths.push(`${basePath}/dist/main.js`, `${basePath}/main.js`);
+                    }
                     
                     console.log('[Main] 当前 URL:', window.location.href);
                     console.log('[Main] 当前路径:', pathname);
                     console.log('[Main] 基础路径:', basePath);
                     console.log('[Main] 当前目录:', currentDir);
                     console.log('[Main] 尝试路径列表:', paths);
+                    console.log('[Main] 路径数量:', paths.length);
+                    
+                    if (paths.length === 0) {
+                        throw new Error('无法构建有效的模块路径。请检查部署配置。');
+                    }
                     
                     let loaded = false;
                     let lastError = null;
+                    const errors = [];
                     
                     for (const path of paths) {
                         try {
@@ -930,16 +939,23 @@
                             loaded = true;
                             break;
                         } catch (err) {
+                            const errorInfo = {
+                                path,
+                                error: err.message,
+                                name: err.name
+                            };
+                            errors.push(errorInfo);
                             console.warn(`[Main] 路径 ${path} 加载失败:`, err.message);
                             lastError = err;
                         }
                     }
                     
                     if (!loaded) {
-                        const errorMsg = lastError?.message || '所有路径都加载失败';
                         console.error('[Main] ❌ 所有路径都加载失败');
+                        console.error('[Main] 所有尝试的错误:', errors);
                         console.error('[Main] 最后尝试的错误:', lastError);
-                        throw new Error(`模块加载失败: ${errorMsg}。请检查 main.js 文件是否存在于 dist 目录中。`);
+                        const errorDetails = errors.map(e => `  - ${e.path}: ${e.error}`).join('\n');
+                        throw new Error(`模块加载失败：所有路径都尝试失败。\n尝试的路径：\n${errorDetails}\n\n请确认：\n1. 已运行 npm run build\n2. dist/main.js 文件存在\n3. 文件已正确部署到 GitHub Pages`);
                     }
                 }
                 
