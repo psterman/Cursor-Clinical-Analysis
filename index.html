@@ -848,179 +848,144 @@
     <div id="fullReportContainer" style="display: none;"></div>
 
     <script type="module">
-        // 动态导入 main.js 模块（适配 GitHub Pages 和 Cloudflare Pages 路径）
-        // 使用 try-catch 和多种路径尝试，确保在不同部署环境下正常工作
+        // 模块加载逻辑（适配开发和生产环境）
         (async function() {
-            // 检测当前部署环境的基础路径
+            // 检测当前部署环境
             const pathname = window.location.pathname;
             const hostname = window.location.hostname;
-            const origin = window.location.origin;
-            
-            // 更可靠的基础路径检测
-            let basePath = '';
-            let isGitHubPages = false;
-            
-            // 检查是否是 GitHub Pages
-            if (hostname.includes('github.io')) {
-                isGitHubPages = true;
-                // 从 pathname 中提取仓库名称
-                // pathname 可能是: /Cursor-Clinical-Analysis/ 或 /Cursor-Clinical-Analysis/index.html
-                // 或者如果是用户页面: / 或 /index.html (没有仓库名)
-                const parts = pathname.split('/').filter(p => p);
-                if (parts.length > 0 && parts[0] !== '') {
-                    // 有仓库名称的情况
-                    basePath = '/' + parts[0];
-                } else {
-                    // 用户页面（username.github.io），没有仓库名称，使用空路径
-                    basePath = '';
-                }
-            } else {
-                // 非 GitHub Pages 环境（本地开发或 Cloudflare Pages）
-                const parts = pathname.split('/').filter(p => p);
-                if (parts.length > 0) {
-                    // 移除最后一个部分（通常是文件名）
-                    basePath = '/' + parts.slice(0, -1).join('/');
-                }
-            }
-            
-            // 确保 basePath 不以 / 结尾（除了根路径）
-            if (basePath && basePath !== '/' && basePath.endsWith('/')) {
-                basePath = basePath.slice(0, -1);
-            }
-            
-            // 获取当前脚本所在目录（更准确的相对路径）
-            const currentDir = pathname.substring(0, pathname.lastIndexOf('/')) || '';
-            
-            // 构建路径列表，优先尝试最可能的路径
-            const paths = isGitHubPages 
-                ? [
-                    // GitHub Pages 路径（根据实际部署位置调整）
-                    // 如果 basePath 为空（用户页面），优先尝试根路径
-                    basePath ? `${basePath}/main.js` : '/main.js',           // 有仓库名: /repo/main.js, 无仓库名: /main.js
-                    basePath ? `${basePath}/dist/main.js` : '/dist/main.js', // 有仓库名: /repo/dist/main.js, 无仓库名: /dist/main.js
-                    // 备用路径
-                    './main.js',                     // 相对路径（当前目录）
-                    './dist/main.js',                // 相对路径（dist 子目录）
-                    `${currentDir}/main.js`,         // 基于当前路径
-                    `${currentDir}/dist/main.js`,   // 基于当前路径的 dist
-                    '/main.js',                      // 绝对路径（备用）
-                    '/dist/main.js'                  // 绝对路径 dist（备用）
-                  ]
-                : [
-                    // 本地开发或 Cloudflare Pages
-                    './main.js',                     // 相对路径（最常用）
-                    './dist/main.js',                // dist 子目录
-                    `${currentDir}/main.js`,         // 基于当前路径
-                    `${currentDir}/dist/main.js`,    // 基于当前路径的 dist
-                    '/main.js',                      // 绝对路径
-                    '/dist/main.js',                 // 绝对路径 dist
-                    basePath ? `${basePath}/main.js` : null,           // 基于 basePath（如果存在）
-                    basePath ? `${basePath}/dist/main.js` : null       // 基于 basePath 的 dist（如果存在）
-                  ].filter(p => p !== null); // 过滤掉 null 值
-            
-            console.log('[Main] 当前 URL:', window.location.href);
-            console.log('[Main] 当前路径:', pathname);
-            console.log('[Main] 主机名:', hostname);
-            console.log('[Main] 基础路径:', basePath);
-            console.log('[Main] 当前目录:', currentDir);
-            console.log('[Main] 是 GitHub Pages:', isGitHubPages);
-            console.log('[Main] 尝试路径列表:', paths);
-            
-            let loaded = false;
-            let lastError = null;
+            const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('localhost') || hostname.includes('192.168.');
+            const isGitHubPages = hostname.includes('github.io');
             
             // 设置加载状态
             window.analysisModuleLoading = true;
             window.analysisModuleError = null;
             
-            for (const path of paths) {
-                try {
-                    console.log(`[Main] 尝试加载模块，路径: ${path}`);
-                    // @vite-ignore - 动态导入路径需要在运行时确定，支持多种部署环境
-                    const module = await import(/* @vite-ignore */ path);
+            try {
+                let module;
+                
+                if (isDev) {
+                    // 开发环境：直接导入（Vite 会自动处理）
+                    console.log('[Main] 开发环境：直接导入 main.js');
+                    module = await import('./main.js');
+                } else {
+                    // 生产环境：动态导入（支持多种部署路径）
+                    console.log('[Main] 生产环境：动态导入 main.js');
                     
-                    // 调试：检查模块导出
-                    console.log('[Main] 模块加载成功，检查导出:', {
-                        hasModule: !!module,
-                        moduleKeys: Object.keys(module || {}),
-                        hasInitializeParser: typeof module?.initializeParser === 'function',
-                        hasProcessFiles: typeof module?.processFiles === 'function',
-                        hasRenderFullDashboard: typeof module?.renderFullDashboard === 'function'
-                    });
-                    
-                    // 检查必需的导出函数
-                    const requiredExports = [
-                        'initializeParser',
-                        'processFiles',
-                        'renderFullDashboard',
-                        'getGlobalStats',
-                        'getVibeResult'
-                    ];
-                    
-                    const missingExports = requiredExports.filter(name => 
-                        typeof module[name] !== 'function'
-                    );
-                    
-                    if (missingExports.length > 0) {
-                        console.error(`[Main] 模块缺少必需的导出:`, missingExports);
-                        console.error(`[Main] 模块实际导出:`, Object.keys(module));
-                        throw new Error(`模块缺少必需的导出函数: ${missingExports.join(', ')}`);
+                    // 检测基础路径
+                    let basePath = '';
+                    if (isGitHubPages) {
+                        const parts = pathname.split('/').filter(p => p && p !== 'index.html');
+                        basePath = parts.length > 0 ? '/' + parts[0] : '';
+                    } else {
+                        const parts = pathname.split('/').filter(p => p && p !== 'index.html');
+                        basePath = parts.length > 0 ? '/' + parts[0] : '';
                     }
                     
-                    const { 
-                        initializeParser, 
-                        processFiles, 
-                        renderFullDashboard,
-                        getGlobalStats,
-                        getVibeResult,
-                        updateNumberWithAnimation,
-                        formatNumber,
-                        fetchTotalTestUsers,
-                        reportNewUser,
-                        updateGlobalStats
-                    } = module;
+                    if (basePath && basePath !== '/' && basePath.endsWith('/')) {
+                        basePath = basePath.slice(0, -1);
+                    }
                     
-                    // 将模块暴露给全局，供 React 使用
-                    window.analysisModule = {
-                        initializeParser,
-                        processFiles,
-                        renderFullDashboard,
-                        getGlobalStats,
-                        getVibeResult,
-                        updateNumberWithAnimation: updateNumberWithAnimation || (() => {}),
-                        formatNumber: formatNumber || ((n) => n.toString()),
-                        fetchTotalTestUsers: fetchTotalTestUsers || (async () => 0),
-                        reportNewUser: reportNewUser || (async () => {}),
-                        updateGlobalStats: updateGlobalStats || (() => {})
-                    };
+                    const currentDir = pathname.substring(0, pathname.lastIndexOf('/')) || '';
                     
-                    // 验证全局对象
-                    console.log('[Main] 全局模块对象已创建:', {
-                        hasInitializeParser: typeof window.analysisModule.initializeParser === 'function',
-                        hasProcessFiles: typeof window.analysisModule.processFiles === 'function',
-                        hasRenderFullDashboard: typeof window.analysisModule.renderFullDashboard === 'function'
-                    });
+                    // 构建路径列表
+                    const paths = [
+                        basePath ? `${basePath}/dist/main.js` : '/dist/main.js',
+                        basePath ? `${basePath}/main.js` : '/main.js',
+                        './dist/main.js',
+                        './main.js',
+                        `${currentDir}/dist/main.js`,
+                        `${currentDir}/main.js`,
+                        '/dist/main.js',
+                        '/main.js'
+                    ];
                     
-                    console.log(`[Main] ✅ 成功加载模块，路径: ${path}`);
-                    loaded = true;
-                    window.analysisModuleLoading = false;
-                    window.analysisModuleError = null;
-                    break;
-                } catch (err) {
-                    console.warn(`[Main] 路径 ${path} 加载失败:`, err.message);
-                    lastError = err;
+                    console.log('[Main] 当前 URL:', window.location.href);
+                    console.log('[Main] 基础路径:', basePath);
+                    console.log('[Main] 尝试路径列表:', paths);
+                    
+                    let loaded = false;
+                    let lastError = null;
+                    
+                    for (const path of paths) {
+                        try {
+                            console.log(`[Main] 尝试加载模块，路径: ${path}`);
+                            module = await import(/* @vite-ignore */ path);
+                            console.log(`[Main] ✅ 成功加载模块，路径: ${path}`);
+                            loaded = true;
+                            break;
+                        } catch (err) {
+                            console.warn(`[Main] 路径 ${path} 加载失败:`, err.message);
+                            lastError = err;
+                        }
+                    }
+                    
+                    if (!loaded) {
+                        throw lastError || new Error('所有路径都加载失败');
+                    }
                 }
-            }
-            
-            if (!loaded) {
-                const errorMsg = lastError?.message || '未知错误';
-                console.error('[Main] ❌ 所有路径都加载失败，请检查 main.js 文件位置');
-                console.error('[Main] 最后一个错误:', lastError);
+                
+                // 检查必需的导出函数
+                const requiredExports = [
+                    'initializeParser',
+                    'processFiles',
+                    'renderFullDashboard',
+                    'getGlobalStats',
+                    'getVibeResult'
+                ];
+                
+                const missingExports = requiredExports.filter(name => 
+                    typeof module[name] !== 'function'
+                );
+                
+                if (missingExports.length > 0) {
+                    console.error(`[Main] 模块缺少必需的导出:`, missingExports);
+                    console.error(`[Main] 模块实际导出:`, Object.keys(module));
+                    throw new Error(`模块缺少必需的导出函数: ${missingExports.join(', ')}`);
+                }
+                
+                const { 
+                    initializeParser, 
+                    processFiles, 
+                    renderFullDashboard,
+                    getGlobalStats,
+                    getVibeResult,
+                    updateNumberWithAnimation,
+                    formatNumber,
+                    fetchTotalTestUsers,
+                    reportNewUser,
+                    updateGlobalStats
+                } = module;
+                
+                // 将模块暴露给全局，供 React 使用
+                window.analysisModule = {
+                    initializeParser,
+                    processFiles,
+                    renderFullDashboard,
+                    getGlobalStats,
+                    getVibeResult,
+                    updateNumberWithAnimation: updateNumberWithAnimation || (() => {}),
+                    formatNumber: formatNumber || ((n) => n.toString()),
+                    fetchTotalTestUsers: fetchTotalTestUsers || (async () => 0),
+                    reportNewUser: reportNewUser || (async () => {}),
+                    updateGlobalStats: updateGlobalStats || (() => {})
+                };
+                
+                // 验证全局对象
+                console.log('[Main] 全局模块对象已创建:', {
+                    hasInitializeParser: typeof window.analysisModule.initializeParser === 'function',
+                    hasProcessFiles: typeof window.analysisModule.processFiles === 'function',
+                    hasRenderFullDashboard: typeof window.analysisModule.renderFullDashboard === 'function'
+                });
+                
                 window.analysisModuleLoading = false;
-                window.analysisModuleError = lastError || new Error('模块加载失败：所有路径都尝试失败');
+                window.analysisModuleError = null;
+            } catch (err) {
+                console.error('[Main] ❌ 模块加载失败:', err);
+                window.analysisModuleLoading = false;
+                window.analysisModuleError = err;
                 // 触发自定义事件，通知 React 组件
                 window.dispatchEvent(new CustomEvent('analysisModuleLoadFailed', { 
-                    detail: { error: window.analysisModuleError } 
+                    detail: { error: err } 
                 }));
             }
         })();

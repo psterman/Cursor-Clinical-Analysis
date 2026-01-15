@@ -44,7 +44,8 @@ export default defineConfig({
   // 如果部署在仓库根目录，使用仓库名称作为 base
   // 如果部署在用户页面（username.github.io），使用 '/'
   // 可以通过环境变量 VITE_BASE_PATH 覆盖
-  base: process.env.VITE_BASE_PATH || '/Cursor-Clinical-Analysis/',
+  // 默认使用 '/' 以支持自动检测，实际路径在运行时通过 index.html 中的逻辑检测
+  base: process.env.VITE_BASE_PATH || '/',
 
   // 优化配置
   optimizeDeps: {

@@ -1092,12 +1092,12 @@ function displayStats() {
   }
 }
 
-// 格式化数字
+// 格式化数字（与 React 组件保持一致）
 function formatNumber(num) {
-  if (num >= 10000) {
-    return (num / 10000).toFixed(1) + '万';
-  }
-  return num.toLocaleString();
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
 }
 
 // 格式化文件大小
